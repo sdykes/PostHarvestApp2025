@@ -1,0 +1,122 @@
+/* header title font */
+.main-header .logo {
+  font-family: "Geograph", "Arial", sans-serif;
+  font-weight: bold;
+  font-size: 20px;
+  height: 50px;
+}
+
+/* background colour of header */
+.skin-blue .main-header .logo {
+  background-color: #48762e;
+  height: 50px;
+}
+
+.sidebar-toggle {
+  height: 50px; 
+  padding-top: 20px !important;
+}
+
+/* background color from remaining part of the header */
+.skin-blue .main-header .navbar {
+  background-color: #48762e;
+  height: 50px;
+}
+
+/* main sidebar */
+.skin-blue .main-sidebar {
+  background-color: #526280;
+}
+
+/* body */
+.content-wrapper {
+  padding-top: 12px;
+}
+
+.content-wrapper, .right-side {
+  background-color: #F7F1DF;
+  font-family: "Geograph", "Arial", sans-serif;
+}
+
+.navbar {
+  min-height:50px 
+}
+
+.navbar-custom-menu {
+       float: left!important;
+}
+
+.left-side, .main-sidebar {
+  padding-top: 50px;
+  font-family: "Geograph", "Arial", sans-serif;
+}
+
+/* the box around the title for the  bins in storage tables */
+.box-header {
+  background-color: #F7F1DF ;
+}
+
+/* the text for the box headers */
+.box-header .box-title {
+  font-weight: bold;
+  font-family: "Geograph", "Arial", sans-serif;
+}
+
+.box-body {
+  background-color: #F7F1DF ;
+}
+
+/* this modifies the colours of the infoboxes */
+.bg-aqua {
+  background-color: #B9D49D !important;
+}
+
+.bg-blue {
+  background-color: #A9B1C0 !important;
+}
+
+.bg-teal {
+  background-color: #F6DBD3 !important;
+}
+
+.bg-maroon {
+  background-color: #A4BB97 !important;
+}
+
+.bg-orange {
+  background-color: #D49A96 !important;
+}
+
+.bg-navy {
+  background-color: #D7E4F1 !important;
+}
+
+.btn-default {
+  background-color:#48762e;
+  color: white;
+  font-family: Geograph New;
+  border-color: #48762e;
+  -webkit-box-shadow: 0px;
+  box-shadow: 0px;
+  margin-left: 20px;
+  margin-bottom: 20px;
+}
+
+.dropdown li {
+  padding: 8px;
+  color: #edb7a7
+}
+
+#logout-button {
+  color: #FFF;
+  font-family: "Geograph", "Arial", sans-serif;
+} 
+
+
+
+
+
+
+
+
+
