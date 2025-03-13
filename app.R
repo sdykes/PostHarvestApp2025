@@ -1,7 +1,6 @@
 
 library(shiny)
 library(shinydashboard)
-#library(shinydashboardPlus)
 library(tidyverse)
 library(shinyjs)
 library(shinyauthr)
@@ -417,13 +416,13 @@ names(GrowerOrchardList) <- tibble(Growers = Growers) |>
 ## Specialty Permissions
 
 Havelock <- list(Growers = c("ROLP 1", "Rakete"),
-                 Orchards=c("Stock Roads","Home Block","Manahi","Te Aute Road North","Te Aute Road South","Raukawa"))
+                 Orchards=c("Stock Roads","Home Block","Manahi","Te Aute Road North","Te Aute Road South","Raukawa","Lobb"))
 Hastings <- list(Growers = c("ROLP 1", "ROLP 2", "Heretaunga Orchards Limited Partnership","Lawn Road Orchard Limited"),
                  Orchards = c("Napier Road North","Napier Road Central","Napier Road South","Haumoana","Ormond Road","Lawn Road"))
 Maraekakaho <- list(Growers = c("Mana Orchards Limited Partnership","Pioneer Capital Molly Limited","Rockit Orchards Limited"),
                     Orchards = c("Mana1","Mana2","Pioneer Orchard","Valley Road"))
 Crownthorpe <- list(Growers = c("Rockit Orchards Limited","Heretaunga Orchards Limited Partnership","Rakete","ROLP 1","ROLP 2"),
-                    Orchards = c("Crown","Lowry Heretaunga","Lowry","Rangi2","Sim1","Sim2","Steel","Wharerangi Orchard"))
+                    Orchards = c("Crown","Lowry Heretaunga","Lowry","Rangi2","Sim1","Sim2","Steel","Wharerangi Orchard","Omahu"))
 RMS <- list(Growers = c("ROLP 1","ROLP 2","Rakete","Heretaunga Orchards Limited Partnership","Pioneer Capital Molly Limited","Rockit Orchards Limited"),
             Orchards = c("Home Block","Raukawa","Te Aute Road North","Wharerangi Orchard","Stock Roads","Te Aute Road South",
                          "Napier Road South","Omahu","Haumoana","Napier Road Central","Napier Road North","Rangi2","Lobb","Sim1",
