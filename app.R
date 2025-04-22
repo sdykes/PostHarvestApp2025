@@ -47,6 +47,7 @@ BinDelivery <- DBI::dbGetQuery(con,
 	                                    sbt.SubdivisionCode AS [Production site],
   	                                  fbt.BlockCode AS [Management area],
 	                                    HarvestDate AS [Harvest Date],
+	                                    ReceivedDate AS [Received date],
 	                                    NoOfBins AS [Bins received],
 	                                    COALESCE([Bins in process],0) AS [Bins in process],
 	                                    NoOfBins - COALESCE([Bins in process],0) AS [Bins currently in storage],
@@ -122,7 +123,7 @@ GraderBatch <- DBI::dbGetQuery(con,
 	                                  bu.[Bins tipped],  
 	                                  [Packing site],
 	                                  InputKgs AS [Input kgs],
-	                                  WasteOtherKgs + COALESCE(JuiceKgs,0) + COALESCE(SampleKgs,0) AS [Reject kgs],
+	                                  COALESCE(WasteOtherKgs,0) + COALESCE(JuiceKgs,0) + COALESCE(SampleKgs,0) AS [Reject kgs],
 	                                  CASE	
 		                                  WHEN ClosedDateTime IS NULL THEN 0
 		                                  ELSE 1
@@ -418,7 +419,7 @@ names(GrowerOrchardList) <- tibble(Growers = Growers) |>
 Havelock <- list(Growers = c("ROLP 1", "Rakete"),
                  Orchards=c("Stock Roads","Home Block","Manahi","Te Aute Road North","Te Aute Road South","Raukawa","Lobb"))
 Hastings <- list(Growers = c("ROLP 1", "ROLP 2", "Heretaunga Orchards Limited Partnership","Lawn Road Orchard Limited"),
-                 Orchards = c("Napier Road North","Napier Road Central","Napier Road South","Haumoana","Ormond Road","Lawn Road"))
+                 Orchards = c("Napier Road North","Napier Road Central","Napier Road South","Haumoana","Ormond Rd","Lawn Road"))
 Maraekakaho <- list(Growers = c("Mana Orchards Limited Partnership","Pioneer Capital Molly Limited","Rockit Orchards Limited"),
                     Orchards = c("Mana1","Mana2","Pioneer Orchard","Valley Road"))
 Crownthorpe <- list(Growers = c("Rockit Orchards Limited","Heretaunga Orchards Limited Partnership","Rakete","ROLP 1","ROLP 2"),
@@ -428,7 +429,7 @@ RMS <- list(Growers = c("ROLP 1","ROLP 2","Rakete","Heretaunga Orchards Limited 
                          "Napier Road South","Omahu","Haumoana","Napier Road Central","Napier Road North","Rangi2","Lobb","Sim1",
                          "Steel","Manahi","Sim2","Crown","Ormond Rd","Lowry Heretaunga","Pioneer Orchard","Lowry","Valley Road"))
 RaketePlus <- list(Growers = c("Rakete","Heretaunga Orchards Limited Partnership","Te Arai Orchard Limited Partnership"),
-                   Orchards = c("Sim1","Sim2","Steel","Manahi","Lobb","Ormond","Crown","Lowry Heretaunga","Te Arai"))
+                   Orchards = c("Sim1","Sim2","Steel","Manahi","Lobb","Ormond Rd","Crown","Lowry Heretaunga","Te Arai"))
 Goodwin <- list(Growers = c("Mana Orchards Limited Partnership","Lawn Road Orchard Limited"),
                 Orchards = c("Mana1","Mana2","Lawn Road"))
 Craigmore <- list(Growers = c("Springhill Horticulture Limited","Waipaoa Horticulture Limited"),
@@ -473,8 +474,8 @@ box_height = "50em"
 plot_height = "46em"
 
 ui <- dashboardPage(
-
-# Define header part of the dashboard
+  
+  # Define header part of the dashboard
   dashboardHeader(
     title = tags$img(src="Rockit2.png", width="100"),
     titleWidth = 300
@@ -482,9 +483,9 @@ ui <- dashboardPage(
     #        style = "padding: 8px; color: #a9342c;",
     #        shinyauthr::logoutUI("logout")),
     #tags$img(src="Rockit2.png", width="200")
-    ),
-
-## Sidebar content
+  ),
+  
+  ## Sidebar content
   dashboardSidebar(
     width = 300,
     collapsed = TRUE, 
@@ -496,8 +497,8 @@ ui <- dashboardPage(
                        label = h5("Select one or more orchards:"),
                        choices = '')
   ),
-
-## Body content
+  
+  ## Body content
   dashboardBody(
     shinyjs::useShinyjs(),
     tags$head(tags$style(".table{margin: 0 auto;}"),
@@ -577,10 +578,10 @@ ui <- dashboardPage(
                 tabPanel("Phytosanitary tracking",
                          fluidRow(
                            column(title = "Proportion of Excluded MPI lots",width = 6, 
-                             DT::dataTableOutput("ExcludedMPILots")),
+                                  DT::dataTableOutput("ExcludedMPILots")),
                            column(title = "Pest interceptions by type",
-                               plotOutput("PestInterceptions"), width=6)
-                        )
+                                  plotOutput("PestInterceptions"), width=6)
+                         )
                 )
     )
   )
@@ -590,8 +591,8 @@ ui <- dashboardPage(
 # Define server logic 
 server <- function(input, output, session) {
   
-# call login module supplying data frame, user and password cols
-# and reactive trigger
+  # call login module supplying data frame, user and password cols
+  # and reactive trigger
   credentials <- shinyauthr::loginServer( 
     id = "login", 
     data = user_base,
@@ -599,14 +600,14 @@ server <- function(input, output, session) {
     pwd_col = password_hash,
     sodium_hashed = TRUE,
     log_out = reactive(logout_init())
-    )
+  )
   
   # call the logout module with reactive trigger to hide/show
-    logout_init <- shinyauthr::logoutServer(
-      id = "logout", 
-      active = reactive(credentials()$user_auth))
+  logout_init <- shinyauthr::logoutServer(
+    id = "logout", 
+    active = reactive(credentials()$user_auth))
   
-# un-collapse the sidebar after login
+  # un-collapse the sidebar after login
   
   observe({
     if(credentials()$user_auth) {
@@ -616,7 +617,7 @@ server <- function(input, output, session) {
     }
   })
   
-## This code defines the orchards for selection
+  ## This code defines the orchards for selection
   
   user_info <- reactive({
     credentials()$info
@@ -653,10 +654,10 @@ server <- function(input, output, session) {
       }
     }
   })
-
-## # Bin accounting tab....consignment by RPIN 
   
-# Determine bins tipped and Bins in process from Bin Usage dataframe:
+  ## # Bin accounting tab....consignment by RPIN 
+  
+  # Determine bins tipped and Bins in process from Bin Usage dataframe:
   
   BinDeliveryFull <- BinDelivery |>
     left_join(BinUsage |>
@@ -670,8 +671,8 @@ server <- function(input, output, session) {
   
   output$BinAccountingRPIN <- DT::renderDataTable({
     #req(credentials()$user_auth)
-
-# Total for the bottom of the table
+    
+    # Total for the bottom of the table
     
     RPINTotal <- BinDeliveryFull |>
       filter(Orchard %in% input$Orchards,
@@ -686,7 +687,7 @@ server <- function(input, output, session) {
       relocate(RPIN, .before = `Received`) |>
       relocate(Orchard, .after = RPIN)
     
-  # Define the table itself
+    # Define the table itself
     
     DT::datatable(BinDeliveryFull |>
                     filter(Orchard %in% input$Orchards,
@@ -705,12 +706,12 @@ server <- function(input, output, session) {
     
   })
   
-# Bin accounting tab....consignment by production site  
+  # Bin accounting tab....consignment by production site  
   
   output$BinAccountingProdSite <- DT::renderDataTable({  
     #req(credentials()$user_auth)
     
-# Total for the bottom of the table
+    # Total for the bottom of the table
     
     PSTotal <- BinDeliveryFull |>
       filter(Orchard %in% input$Orchards, #c("Home Block"), #
@@ -727,10 +728,10 @@ server <- function(input, output, session) {
       relocate(Orchard, .after = RPIN) |>
       relocate(`Production site`, .after = Orchard)
     
-  
+    
     DT::datatable(BinDeliveryFull |>
                     filter(Orchard %in% input$Orchards, #c("Home Block"), #
-                    Season == 2025) |>
+                           Season == 2025) |>
                     select(c(RPIN, Orchard, `Production site`,`Bins received`,`In process`,Tipped,`Bins currently in storage`)) |>
                     group_by(RPIN,Orchard,`Production site`) |>
                     summarise(`Received` = sum(`Bins received`),
@@ -742,10 +743,10 @@ server <- function(input, output, session) {
                   options = list(scrollX = TRUE),
                   escape = FALSE,
                   rownames = FALSE)
-
+    
   })
   
- # Bins received tab....detailed consignment listing
+  # Bins received tab....detailed consignment listing
   
   output$ConsignmentDetail <- DT::renderDataTable({  
     #req(credentials()$user_auth)
@@ -760,9 +761,9 @@ server <- function(input, output, session) {
     
   })
   
-##################################################################################
-#                            Down load button                                    #
-############################# Bins received #####################################
+  ##################################################################################
+  #                            Down load button                                    #
+  ############################# Bins received #####################################
   
   receievedTable <- reactive({ 
     #req(credentials()$user_auth)
@@ -786,7 +787,7 @@ server <- function(input, output, session) {
     }
   )
   
-# Bin storage by RPIN
+  # Bin storage by RPIN
   
   output$StorageByRPIN <- DT::renderDataTable({
     #req(credentials()$user_auth)
@@ -804,7 +805,7 @@ server <- function(input, output, session) {
       relocate(`Bins received`, .after = `Storage type`) |>
       relocate(`Bins currently in storage`, .after = `Bins received`)
     
- # Define the table itself
+    # Define the table itself
     
     DT::datatable(BinDelivery |>
                     filter(Orchard %in% input$Orchards, #c("Home Block"), #
@@ -824,8 +825,8 @@ server <- function(input, output, session) {
     
   })
   
-
-# bin tipped tab - Closed batches Te Ipu
+  
+  # bin tipped tab - Closed batches Te Ipu
   
   output$ClosedBatchesTeIpu <- DT::renderDataTable({  
     #req(credentials()$user_auth)
@@ -847,7 +848,7 @@ server <- function(input, output, session) {
     
   })
   
-# bins tipped tabs - closed batches Sunfruit
+  # bins tipped tabs - closed batches Sunfruit
   
   output$ClosedBatchesSF <- DT::renderDataTable({  
     #req(credentials()$user_auth)
@@ -869,7 +870,7 @@ server <- function(input, output, session) {
     
   })
   
-# bins tipped tabs - closed batches Kiwi Crunch
+  # bins tipped tabs - closed batches Kiwi Crunch
   
   output$ClosedBatchesKC <- DT::renderDataTable({  
     #req(credentials()$user_auth)
@@ -891,7 +892,7 @@ server <- function(input, output, session) {
     
   })
   
-# bins tipped tabs - bins associated with open batches by PS
+  # bins tipped tabs - bins associated with open batches by PS
   
   output$OpenBatchesPS <- DT::renderDataTable({  
     #req(credentials()$user_auth)
@@ -908,7 +909,7 @@ server <- function(input, output, session) {
              `Production site` = "",
              `Packing site` = "") |>
       select(c(RPIN, Orchard, `Production site`,`Packing site`,`Bins to be tipped`))
- 
+    
     DT:: datatable(GraderBatch |>
                      filter(Season == 2025,
                             Orchard %in% input$Orchards, #c("Home Block"),#
@@ -938,106 +939,54 @@ server <- function(input, output, session) {
              `Batch closed` == 1) |>
       mutate(Packout = 1-`Reject kgs`/`Input kgs`)
   })
+  
+  output$closedBatches <- downloadHandler(
+    filename = function() {
+      paste0("closedBatches-",Sys.Date(),".csv")
+    },
+    content = function(file) {
+      write.csv(closedBatchesTable(), file)
+    }
+  )
+  
+  #============================Packout plot======================================
+  
+  output$packoutPlotTeIpu <- renderPlot({
+    #req(credentials()$user_auth)
     
-    output$closedBatches <- downloadHandler(
-      filename = function() {
-        paste0("closedBatches-",Sys.Date(),".csv")
-      },
-      content = function(file) {
-        write.csv(closedBatchesTable(), file)
-      }
-    )
+    packOutPlotDataTeIpu <- GraderBatch |>
+      filter(Season == 2025,
+             `Batch closed` == 1,
+             `Packing site` == "Te Ipu Packhouse (RO)") |>
+      mutate(`Storage days` = as.numeric(`Pack date`-`Harvest date`),
+             Packout = 1-`Reject kgs`/`Input kgs`)
     
- #============================Packout plot======================================
-    
-   output$packoutPlotTeIpu <- renderPlot({
-     #req(credentials()$user_auth)
-     
-     packOutPlotDataTeIpu <- GraderBatch |>
-       filter(Season == 2025,
-              `Batch closed` == 1,
-              `Packing site` == "Te Ipu Packhouse (RO)") |>
-       mutate(`Storage days` = as.numeric(`Pack date`-`Harvest date`),
-              Packout = 1-`Reject kgs`/`Input kgs`)
-       
-      if(input$dateInput == "Storage days") {
-        packOutPlotDataTeIpu |>
-          filter(!Orchard %in% input$Orchards) |>
-          ggplot(aes(x=`Storage days`, y=Packout)) +
-          geom_point(colour="#526280", alpha=0.3, size=3) +
-          geom_point(data = packOutPlotDataTeIpu |> filter(Orchard %in% input$Orchards),
-                      aes(x=`Storage days`, y=Packout), colour="#a9342c", size=4) +
-          scale_y_continuous("Packout / %", labels=scales::percent) +
-          labs(x = "Storage days") + 
-          ggthemes::theme_economist() + 
-          theme(legend.position = "top",
-                axis.title.x = element_text(margin = margin(t = 10), size = 14),
-                axis.title.y = element_text(margin = margin(r = 10), size = 14),
-                axis.text.y = element_text(size = 14, hjust=1),
-                axis.text.x = element_text(size = 14),
-                plot.background = element_rect(fill = "#D7E4F1", colour = "#D7E4F1"),
-                legend.text = element_text(size = 14),
-                legend.title = element_text(size = 14),
-                strip.text = element_text(margin = margin(b=10), size = 14))
-        
-      } else if(input$dateInput == "Pack date") {
-        packOutPlotDataTeIpu |>
-          filter(!Orchard %in% input$Orchards) |>
-          ggplot(aes(x=`Pack date`, y=Packout)) +
-          geom_point(colour="#526280", alpha=0.3, size=3) +
-          geom_point(data = packOutPlotDataTeIpu %>% filter(Orchard %in% input$Orchards),
-                      aes(x=`Pack date`, y=Packout), colour="#a9342c", size=4) +
-          scale_y_continuous("Packout / %", labels=scales::percent) +
-          labs(x = "Pack date") + 
-          ggthemes::theme_economist() + 
-          theme(legend.position = "top",
-                axis.title.x = element_text(margin = margin(t = 10), size = 14),
-                axis.title.y = element_text(margin = margin(r = 10), size = 14),
-                axis.text.y = element_text(size = 14, hjust=1),
-                axis.text.x = element_text(size = 14),
-                plot.background = element_rect(fill = "#D7E4F1", colour = "#D7E4F1"),
-                legend.text = element_text(size = 14),
-                legend.title = element_text(size = 14),
-                strip.text = element_text(margin = margin(b=10), size = 14))
-        
-      } else {
-        packOutPlotDataTeIpu |>
-          filter(!Orchard %in% input$Orchards) |>
-          ggplot(aes(x=`Harvest date`, y=Packout)) +
-          geom_point(colour="#526280", alpha=0.3, size = 3) +
-          geom_point(data = packOutPlotDataTeIpu %>% filter(Orchard %in% input$Orchards),
-                      aes(x=`Harvest date`, y=Packout), colour="#a9342c", size=4) +
-          scale_y_continuous("Packout / %", labels=scales::percent) +
-          labs(x = "Harvest date") + 
-          ggthemes::theme_economist() + 
-          theme(legend.position = "top",
-                axis.title.x = element_text(margin = margin(t = 10), size = 14),
-                axis.title.y = element_text(margin = margin(r = 10), size = 14),
-                axis.text.y = element_text(size = 14, hjust=1),
-                axis.text.x = element_text(size = 14),
-                plot.background = element_rect(fill = "#D7E4F1", colour = "#D7E4F1"),
-                legend.text = element_text(size = 14),
-                legend.title = element_text(size = 14),
-                strip.text = element_text(margin = margin(b=10), size = 14))
-      }
-    })
-    
-    output$packoutPlotSF <- renderPlot({ 
-      #req(credentials()$user_auth)
+    if(input$dateInput == "Storage days") {
+      packOutPlotDataTeIpu |>
+        filter(!Orchard %in% input$Orchards) |>
+        ggplot(aes(x=`Storage days`, y=Packout)) +
+        geom_point(colour="#526280", alpha=0.3, size=3) +
+        geom_point(data = packOutPlotDataTeIpu |> filter(Orchard %in% input$Orchards),
+                   aes(x=`Storage days`, y=Packout), colour="#a9342c", size=4) +
+        scale_y_continuous("Packout / %", labels=scales::percent) +
+        labs(x = "Storage days") + 
+        ggthemes::theme_economist() + 
+        theme(legend.position = "top",
+              axis.title.x = element_text(margin = margin(t = 10), size = 14),
+              axis.title.y = element_text(margin = margin(r = 10), size = 14),
+              axis.text.y = element_text(size = 14, hjust=1),
+              axis.text.x = element_text(size = 14),
+              plot.background = element_rect(fill = "#D7E4F1", colour = "#D7E4F1"),
+              legend.text = element_text(size = 14),
+              legend.title = element_text(size = 14),
+              strip.text = element_text(margin = margin(b=10), size = 14))
       
-      packOutPlotDataSF <- GraderBatch |>
-        filter(Season == 2025,
-               `Batch closed` == 1,
-               `Packing site` == "Sunfruit Limited") |>
-        mutate(`Storage days` = as.numeric(`Pack date`-`Harvest date`),
-               Packout = 1-`Reject kgs`/`Input kgs`)
-     
-      
-      packOutPlotDataSF |>
-        filter(!Orchard %in% input$Orchards) |> #c("Home Block")) |> #
+    } else if(input$dateInput == "Pack date") {
+      packOutPlotDataTeIpu |>
+        filter(!Orchard %in% input$Orchards) |>
         ggplot(aes(x=`Pack date`, y=Packout)) +
         geom_point(colour="#526280", alpha=0.3, size=3) +
-        geom_point(data = packOutPlotDataSF %>% filter(Orchard %in% input$Orchards), #c("Home Block")),
+        geom_point(data = packOutPlotDataTeIpu %>% filter(Orchard %in% input$Orchards),
                    aes(x=`Pack date`, y=Packout), colour="#a9342c", size=4) +
         scale_y_continuous("Packout / %", labels=scales::percent) +
         labs(x = "Pack date") + 
@@ -1051,14 +1000,257 @@ server <- function(input, output, session) {
               legend.text = element_text(size = 14),
               legend.title = element_text(size = 14),
               strip.text = element_text(margin = margin(b=10), size = 14))
-    })
-
-#==================================Defect Plot==================================
-    
-    output$defectPlot <- renderPlot({
-      #req(credentials()$user_auth)
       
-# Population defect profile      
+    } else {
+      packOutPlotDataTeIpu |>
+        filter(!Orchard %in% input$Orchards) |>
+        ggplot(aes(x=`Harvest date`, y=Packout)) +
+        geom_point(colour="#526280", alpha=0.3, size = 3) +
+        geom_point(data = packOutPlotDataTeIpu %>% filter(Orchard %in% input$Orchards),
+                   aes(x=`Harvest date`, y=Packout), colour="#a9342c", size=4) +
+        scale_y_continuous("Packout / %", labels=scales::percent) +
+        labs(x = "Harvest date") + 
+        ggthemes::theme_economist() + 
+        theme(legend.position = "top",
+              axis.title.x = element_text(margin = margin(t = 10), size = 14),
+              axis.title.y = element_text(margin = margin(r = 10), size = 14),
+              axis.text.y = element_text(size = 14, hjust=1),
+              axis.text.x = element_text(size = 14),
+              plot.background = element_rect(fill = "#D7E4F1", colour = "#D7E4F1"),
+              legend.text = element_text(size = 14),
+              legend.title = element_text(size = 14),
+              strip.text = element_text(margin = margin(b=10), size = 14))
+    }
+  })
+  
+  output$packoutPlotSF <- renderPlot({ 
+    #req(credentials()$user_auth)
+    
+    packOutPlotDataSF <- GraderBatch |>
+      filter(Season == 2025,
+             `Batch closed` == 1,
+             `Packing site` == "Sunfruit Limited") |>
+      mutate(`Storage days` = as.numeric(`Pack date`-`Harvest date`),
+             Packout = 1-`Reject kgs`/`Input kgs`)
+    
+    
+    packOutPlotDataSF |>
+      filter(!Orchard %in% input$Orchards) |> #c("Home Block")) |> #
+      ggplot(aes(x=`Pack date`, y=Packout)) +
+      geom_point(colour="#526280", alpha=0.3, size=3) +
+      geom_point(data = packOutPlotDataSF %>% filter(Orchard %in% input$Orchards), #c("Home Block")),
+                 aes(x=`Pack date`, y=Packout), colour="#a9342c", size=4) +
+      scale_y_continuous("Packout / %", labels=scales::percent) +
+      labs(x = "Pack date") + 
+      ggthemes::theme_economist() + 
+      theme(legend.position = "top",
+            axis.title.x = element_text(margin = margin(t = 10), size = 14),
+            axis.title.y = element_text(margin = margin(r = 10), size = 14),
+            axis.text.y = element_text(size = 14, hjust=1),
+            axis.text.x = element_text(size = 14),
+            plot.background = element_rect(fill = "#D7E4F1", colour = "#D7E4F1"),
+            legend.text = element_text(size = 14),
+            legend.title = element_text(size = 14),
+            strip.text = element_text(margin = margin(b=10), size = 14))
+  })
+  
+  #==================================Defect Plot==================================
+  
+  output$defectPlot <- renderPlot({
+    #req(credentials()$user_auth)
+    
+    # Population defect profile 
+    
+    SampQtyPop <- DefectAssessment |>
+      filter(Season == 2025) |>
+      inner_join(GraderBatch |>
+                   filter(Season == 2025,
+                          `Batch closed` == 1,
+                          `Packing site` == "Te Ipu Packhouse (RO)") |>
+                   select(c(GraderBatchID)),
+                 by = "GraderBatchID") |>
+      group_by(GraderBatchID) |>
+      summarise(SampleQty = max(SampleQty, na.rm=T),
+                .groups = "drop") |>
+      summarise(SampleQty = sum(SampleQty, na.rm=T))
+    
+    POPop <- GraderBatch |>
+      filter(Season == 2025,
+             `Batch closed` == 1,
+             `Packing site` == "Te Ipu Packhouse (RO)") |>
+      summarise(`Input kgs` = sum(`Input kgs`, na.rm=T),
+                `Reject kgs` = sum(`Reject kgs`, na.rm=T)) |>
+      mutate(Packout = 1-`Reject kgs`/`Input kgs`) |>
+      select(-c(`Reject kgs`,`Input kgs`))
+    
+    
+    DA2025pop <- DefectAssessment |>
+      filter(Season == 2025) |>
+      inner_join(GraderBatch |>
+                   filter(Season == 2025,
+                          `Batch closed` == 1,
+                          `Packing site` == "Te Ipu Packhouse (RO)") |>
+                   mutate(Packout = 1-`Reject kgs`/`Input kgs`) |>
+                   select(c(GraderBatchID,`Reject kgs`,`Input kgs`)),
+                 by = "GraderBatchID") |>
+      group_by(Defect) |>
+      summarise(DefectQty = sum(DefectQty)) |>
+      mutate(SampleQty = SampQtyPop[[1]],
+             Packout = POPop[[1]],
+             defProp = (1-Packout)*DefectQty/SampleQty,
+             defPerc = scales::percent(defProp, 0.1),
+             Source = "Population") 
+    
+    Top15 <- DA2025pop |>
+      arrange(defProp) |>
+      slice_tail(n=15) |>
+      pull(Defect)
+    
+    SampQtyRPIN <- DefectAssessment |>
+      filter(Season == 2025,
+             #Orchard %in% c("Home Block", "Stock Roads")) |> 
+             Orchard %in% input$Orchards) |>
+      inner_join(GraderBatch |>
+                   filter(Season == 2025,
+                          `Batch closed` == 1,
+                          `Packing site` == "Te Ipu Packhouse (RO)") |>
+                   mutate(Packout = 1-`Reject kgs`/`Input kgs`) |>
+                   select(c(GraderBatchID,`Reject kgs`,`Input kgs`)),
+                 by = "GraderBatchID") |>
+      group_by(Orchard, GraderBatchID) |>
+      summarise(SampleQty = max(SampleQty),
+                .groups = "drop") |>
+      summarise(SampleQty = sum(SampleQty))
+    
+    PORPIN <- GraderBatch |>
+      filter(Season == 2025,
+             `Batch closed` == 1,
+             `Packing site` == "Te Ipu Packhouse (RO)",
+             #Orchard %in% c("Home Block", "Stock Roads")) |> 
+             Orchard %in% input$Orchards) |>
+      summarise(`Input kgs` = sum(`Input kgs`, na.rm=T),
+                `Reject kgs` = sum(`Reject kgs`, na.rm=T)) |>
+      mutate(Packout = 1-`Reject kgs`/`Input kgs`) |>
+      select(-c(`Reject kgs`,`Input kgs`))
+    
+    DA2025RPIN <- DefectAssessment |>
+      filter(Season == 2025,
+             #Orchard %in% c("Home Block", "Stock Roads")) |> 
+             Orchard %in% input$Orchards) |>
+      inner_join(GraderBatch |>
+                   filter(Season == 2025,
+                          `Batch closed` == 1,
+                          `Packing site` == "Te Ipu Packhouse (RO)") |>
+                   mutate(Packout = 1-`Reject kgs`/`Input kgs`) |>
+                   select(c(GraderBatchID,`Reject kgs`,`Input kgs`)),
+                 by = "GraderBatchID") |>
+      group_by(Defect) |>
+      summarise(DefectQty = sum(DefectQty)) |>
+      mutate(SampleQty = SampQtyRPIN[[1]],
+             Packout = PORPIN[[1]],
+             defProp = (1-Packout)*DefectQty/SampleQty,
+             defPerc = scales::percent(defProp, 0.1),
+             Source = "Selected RPIN(s)") 
+    
+    DA2025pop |>
+      bind_rows(DA2025RPIN) |>
+      filter(Defect %in% Top15) |>
+      mutate(Defect = factor(Defect, levels = Top15)) |>
+      ggplot(aes(Defect, defProp, fill=Source)) +
+      geom_col(position = position_dodge()) +
+      geom_text(aes(label = defPerc, y = defProp), size = 4.0, hjust = -0.2,
+                position = position_dodge(width=0.9), colour = "black") +
+      coord_flip() +
+      scale_y_continuous("Defect proportion / %", labels = scales::label_percent(0.1)) +
+      scale_fill_manual(values = c("#a9342c","#48762e","#526280","#f6c15f")) +
+      scale_colour_manual(values = c("#a9342c","#48762e","#526280","#f6c15f")) +
+      ggthemes::theme_economist() + 
+      theme(legend.position = "top",
+            axis.title.x = element_text(margin = margin(t = 10), size = 14),
+            axis.title.y = element_text(margin = margin(r = 10), size = 14),
+            axis.text.y = element_text(size = 14, hjust=1),
+            axis.text.x = element_text(size = 14),
+            plot.background = element_rect(fill = "#D7E4F1", colour = "#D7E4F1"),
+            legend.text = element_text(size = 14),
+            legend.title = element_text(size = 14),
+            strip.text = element_text(margin = margin(b=10), size = 14))
+    
+  })
+  
+  output$defectHeatMap <- renderPlot({
+    #req(credentials()$user_auth)
+    
+    if(nrow(GraderBatch |> 
+            filter(Season == 2025,
+                   Orchard %in% input$Orchards)) > 0) { 
+      
+      SampQtyByPS <- DefectAssessment |>
+        filter(Season == 2025,
+               #Orchard %in% c("Home Block", "Stock Roads")) |> 
+               Orchard %in% input$Orchards) |>
+        group_by(Orchard, `Production site`, GraderBatchID) |>
+        summarise(SampleQty = max(SampleQty, na.rm=T),
+                  .groups = "drop") |>
+        group_by(Orchard, `Production site`) |>
+        summarise(SampleQty = sum(SampleQty),
+                  .groups = "drop")
+      
+      POByPS <- GraderBatch |>
+        filter(Season == 2025,
+               `Batch closed` == 1,
+               #Orchard %in% c("Home Block", "Stock Roads"),
+               Orchard %in% input$Orchards,
+               `Packing site` == "Te Ipu Packhouse (RO)") |>
+        group_by(Orchard, `Production site`) |>
+        summarise(`Reject kgs` = sum(`Reject kgs`),
+                  `Input kgs` = sum(`Input kgs`),
+                  .groups = "drop") |>
+        mutate(Packout = 1-`Reject kgs`/`Input kgs`) |>
+        select(-c(`Reject kgs`,`Input kgs`))
+      
+      
+      DA2025byPS <- DefectAssessment |>
+        filter(Season == 2025,
+               #Orchard %in% c("Home Block", "Stock Roads")) |> 
+               Orchard %in% input$Orchards) |>
+        inner_join(GraderBatch |>
+                     filter(Season == 2025,
+                            `Batch closed` == 1,
+                            #Orchard %in% c("Home Block", "Stock Roads"),
+                            Orchard %in% input$Orchards,
+                            `Packing site` == "Te Ipu Packhouse (RO)") |>
+                     select(c(GraderBatchID)), 
+                   by = "GraderBatchID") |>
+        select(-SampleQty) |>
+        group_by(Orchard,`Production site`,Defect) |>
+        summarise(DefectQty = sum(DefectQty),
+                  .groups = "drop") |>
+        left_join(SampQtyByPS, by = c("Orchard","Production site")) |>
+        left_join(POByPS, by = c("Orchard","Production site")) |>
+        mutate(defProp = (1-Packout)*DefectQty/SampleQty) 
+      
+      SampQtyPop <- DefectAssessment |>
+        filter(Season == 2025) |>
+        inner_join(GraderBatch |>
+                     filter(Season == 2025,
+                            `Batch closed` == 1,
+                            `Packing site` == "Te Ipu Packhouse (RO)") |>
+                     select(c(GraderBatchID)),
+                   by = "GraderBatchID") |>
+        group_by(GraderBatchID) |>
+        summarise(SampleQty = max(SampleQty, na.rm=T),
+                  .groups = "drop") |>
+        summarise(SampleQty = sum(SampleQty, na.rm=T))
+      
+      POPop <- GraderBatch |>
+        filter(Season == 2025,
+               `Batch closed` == 1,
+               `Packing site` == "Te Ipu Packhouse (RO)") |>
+        summarise(`Input kgs` = sum(`Input kgs`, na.rm=T),
+                  `Reject kgs` = sum(`Reject kgs`, na.rm=T)) |>
+        mutate(Packout = 1-`Reject kgs`/`Input kgs`) |>
+        select(-c(`Reject kgs`,`Input kgs`))
+      
       
       DA2025pop <- DefectAssessment |>
         filter(Season == 2025) |>
@@ -1070,186 +1262,96 @@ server <- function(input, output, session) {
                      select(c(GraderBatchID,`Reject kgs`,`Input kgs`)),
                    by = "GraderBatchID") |>
         group_by(Defect) |>
-        summarise(DefectQty = sum(DefectQty),
-                  SampleQty = sum(SampleQty),
-                  `Reject kgs` = sum(`Reject kgs`),
-                  `Input kgs` = sum(`Input kgs`)) |>
-        mutate(Packout = 1-`Reject kgs`/`Input kgs`,
+        summarise(DefectQty = sum(DefectQty)) |>
+        mutate(SampleQty = SampQtyPop[[1]],
+               Packout = POPop[[1]],
                defProp = (1-Packout)*DefectQty/SampleQty,
                defPerc = scales::percent(defProp, 0.1),
                Source = "Population") 
       
-      Top15 <- DA2025pop |>
-        arrange(defProp) |>
-        slice_tail(n=15) |>
+      top_ten <- DA2025pop |>
+        arrange(desc(defProp)) |>
+        slice_head(n=10) |>
         pull(Defect)
       
-      DA2025RPIN <- DefectAssessment |>
-        filter(Season == 2025,
-               Orchard %in% input$Orchards) |> #c("Home Block")) |> #
-        inner_join(GraderBatch |>
-                     filter(Season == 2025,
-                            `Batch closed` == 1,
-                            `Packing site` == "Te Ipu Packhouse (RO)") |>
-                     mutate(Packout = 1-`Reject kgs`/`Input kgs`) |>
-                     select(c(GraderBatchID,`Reject kgs`,`Input kgs`)),
-                   by = "GraderBatchID") |>
-        group_by(Defect) |>
-        summarise(DefectQty = sum(DefectQty),
-                  SampleQty = sum(SampleQty),
-                  `Reject kgs` = sum(`Reject kgs`),
-                  `Input kgs` = sum(`Input kgs`)) |>
-        mutate(Packout = 1-`Reject kgs`/`Input kgs`,
-               defProp = (1-Packout)*DefectQty/SampleQty,
-               defPerc = scales::percent(defProp, 0.1),
-               Source = "Selected RPIN(s)") 
-      
-      DA2025pop |>
-        bind_rows(DA2025RPIN) |>
-        filter(Defect %in% Top15) |>
-        mutate(Defect = factor(Defect, levels = Top15)) |>
-        ggplot(aes(Defect, defProp, fill=Source)) +
-        geom_col(position = position_dodge()) +
-        geom_text(aes(label = defPerc, y = defProp), size = 4.0, hjust = -0.2,
-                  position = position_dodge(width=0.9), colour = "black") +
-        coord_flip() +
-        scale_y_continuous("Defect proportion / %", labels = scales::label_percent(0.1)) +
-        scale_fill_manual(values = c("#a9342c","#48762e","#526280","#f6c15f")) +
-        scale_colour_manual(values = c("#a9342c","#48762e","#526280","#f6c15f")) +
-        ggthemes::theme_economist() + 
-        theme(legend.position = "top",
-              axis.title.x = element_text(margin = margin(t = 10), size = 14),
-              axis.title.y = element_text(margin = margin(r = 10), size = 14),
-              axis.text.y = element_text(size = 14, hjust=1),
-              axis.text.x = element_text(size = 14),
-              plot.background = element_rect(fill = "#D7E4F1", colour = "#D7E4F1"),
-              legend.text = element_text(size = 14),
-              legend.title = element_text(size = 14),
-              strip.text = element_text(margin = margin(b=10), size = 14))
- 
-    })
- 
-    output$defectHeatMap <- renderPlot({
-      #req(credentials()$user_auth)
-      
-      if(nrow(GraderBatch |> 
-              filter(Season == 2025,
-                     Orchard %in% input$Orchards)) > 0) { 
-      
-        DA2025byPS <- DefectAssessment |>
-          filter(Season == 2025,
-                 Orchard %in% input$Orchards) |> #c("Home Block", "Wharerangi Orchard")) |>
-          inner_join(GraderBatch |>
-                       filter(Season == 2025,
-                              `Batch closed` == 1,
-                              Orchard %in% input$Orchards) |> #c("Home Block", "Wharerangi Orchard")
-                       group_by(GraderBatchID) |>
-                       summarise(`Reject kgs` = sum(`Reject kgs`),
-                                 `Input kgs` = sum(`Input kgs`)), 
-                     by = "GraderBatchID") |>
-          group_by(Orchard,`Production site`,Defect) |>
-          summarise(DefectQty = sum(DefectQty),
-                    SampleQty = sum(SampleQty),
-                    `Reject kgs` = sum(`Reject kgs`),
-                    `Input kgs` = sum(`Input kgs`),
-                    .groups = "drop") |>
-          mutate(Packout = 1-`Reject kgs`/`Input kgs`,
-                 defProp = (1-Packout)*DefectQty/SampleQty) 
-        
-        
-        top_ten <- DA2025byPS |>
-          group_by(Defect) |>
-          summarise(DefectQty = sum(DefectQty, na.rm=T),
-                    SampleQty = sum(SampleQty, na.rm=T),
-                    `Reject kgs` = sum(`Reject kgs`),
-                    `Input kgs` = sum(`Input kgs`),
-                    .groups = "drop") |>
-          mutate(Packout = 1 - `Reject kgs`/`Input kgs`,
-                 DefectProp = (1-Packout)*DefectQty/SampleQty) |>
-          arrange(desc(DefectProp)) |>
-          slice_head(n=10) |>
-          pull(Defect)
-        
-        
-        DA2025byPS |>  
-          filter(Orchard %in% input$Orchards, #c("Home Block", "Wharerangi Orchard"),
-                 Defect %in% top_ten) |>
-          mutate(FarmSub = str_c(Orchard," ",`Production site`),
-                 Defect = factor(Defect, levels = top_ten)) |>
-          ggplot(aes(x=Defect, y=FarmSub)) +
-          geom_tile(aes(fill = defProp)) +
-          geom_text(aes(label = scales::percent(defProp, accuracy=0.1)), size = 4.0) +
-          scale_fill_gradient(low = "white", 
-                              high = "#a9342c") +
-          labs(x = "Top ten defects", 
-               y = "Production site") +
-          ggthemes::theme_economist() +
-          theme(axis.title.x = element_text(margin = margin(t = 10)),
-                axis.title.y = element_text(margin = margin(r = 10)),
-                panel.grid.major.x=element_blank(), 
-                panel.grid.minor.x=element_blank(), 
-                panel.grid.major.y=element_blank(), 
-                panel.grid.minor.y=element_blank(),
-                axis.text.x = element_text(angle=45, hjust = 1,vjust=1,size = 10),
-                axis.text.y = element_text(angle=0, hjust = 1,size = 10),
-                plot.title = element_text(size = 14, face = "bold"),
-                strip.text = element_text(size = 9),
-                plot.background = element_rect(fill = "#F7F1DF", colour = "#F7F1DF"),
-                legend.position = "none") 
-      } else {
-        tibble(x = c(0,1), y = c(0,1)) |>
-          ggplot(aes(x = x, y = y)) +
-          annotate("text", x=0.5, y=0.5, label = "nothing packed yet", 
-                   size = 20, colour = "#526280") +
-          theme_void() +
-          theme(plot.background = element_rect(fill = "#F7F1DF", colour = "#F7F1DF"))
-      }
-
-    })
+      DA2025byPS |>  
+        filter(Defect %in% top_ten) |>
+        mutate(FarmSub = str_c(Orchard," ",`Production site`),
+               Defect = factor(Defect, levels = top_ten)) |>
+        ggplot(aes(x=Defect, y=FarmSub)) +
+        geom_tile(aes(fill = defProp)) +
+        geom_text(aes(label = scales::percent(defProp, accuracy=0.1)), size = 4.0) +
+        scale_fill_gradient(low = "white", 
+                            high = "#a9342c") +
+        labs(x = "Top ten defects", 
+             y = "Production site") +
+        ggthemes::theme_economist() +
+        theme(axis.title.x = element_text(margin = margin(t = 10)),
+              axis.title.y = element_text(margin = margin(r = 10)),
+              panel.grid.major.x=element_blank(), 
+              panel.grid.minor.x=element_blank(), 
+              panel.grid.major.y=element_blank(), 
+              panel.grid.minor.y=element_blank(),
+              axis.text.x = element_text(angle=45, hjust = 1,vjust=1,size = 10),
+              axis.text.y = element_text(angle=0, hjust = 1,size = 10),
+              plot.title = element_text(size = 14, face = "bold"),
+              strip.text = element_text(size = 9),
+              plot.background = element_rect(fill = "#F7F1DF", colour = "#F7F1DF"),
+              legend.position = "none") 
+    } else {
+      tibble(x = c(0,1), y = c(0,1)) |>
+        ggplot(aes(x = x, y = y)) +
+        annotate("text", x=0.5, y=0.5, label = "nothing packed yet", 
+                 size = 20, colour = "#526280") +
+        theme_void() +
+        theme(plot.background = element_rect(fill = "#F7F1DF", colour = "#F7F1DF"))
+    }
     
-    output$ExcludedMPILots <- DT::renderDataTable({  
-      # req(credentials()$user_auth)
-      
-      PhytoAssSummary <- PhytoAss |>
-        filter(Season == 2025) |>
-        group_by(GraderBatchMPILotID) |>
-        summarise(DefectQty = sum(DefectQty)) 
-      
-      ExcludedLotsTally <- MPILots |> 
-        filter(Season == 2025,
-               Orchard %in% input$Orchards) |>
-        left_join(PhytoAssSummary, by = "GraderBatchMPILotID") |>
-        mutate(DefectQty = replace_na(DefectQty,0),
-               ExcludedMPILot = if_else(DefectQty > 0, 1, 0)) |>
-        group_by(Orchard, `Production site`) |>
-        summarise(`No of MPI lots` = n(),
-                  `No of excluded lots` = sum(ExcludedMPILot),
-                  .groups = "drop") |>
-        mutate(PropExcludedLots = `No of excluded lots`/`No of MPI lots`)
-      
-      DT:: datatable(ExcludedLotsTally |>
-                       mutate(PropExcludedLots = scales::percent(PropExcludedLots, 0.01)), 
-                     options = list(scrollX = TRUE),
-                     escape = FALSE,
-                     rownames = FALSE)
-    })
+  })
+  
+  output$ExcludedMPILots <- DT::renderDataTable({  
+    # req(credentials()$user_auth)
     
-    output$PestInterceptions <- renderPlot({
-      #req(credentials()$user_auth)
-      
-      PhytoByPestInterception <- PhytoAss |>
-        filter(Season == 2025) |>
-        group_by(GraderBatchMPILotID,Defect) |>
-        summarise(DefectQty = sum(DefectQty),
-                  .groups = "drop") |>
-        left_join(MPILots, by = "GraderBatchMPILotID") |>
-        filter(Orchard %in% input$Orchards) |>
-        group_by(Orchard,`Production site`,Defect) |>
-        summarise(DefectQty = sum(DefectQty),
-                  .groups = "drop") |>
-        mutate(PlotLabel = str_c(Orchard," ",`Production site`))
-      
-      if(nrow(PhytoByPestInterception) > 0) { 
+    PhytoAssSummary <- PhytoAss |>
+      filter(Season == 2025) |>
+      group_by(GraderBatchMPILotID) |>
+      summarise(DefectQty = sum(DefectQty)) 
+    
+    ExcludedLotsTally <- MPILots |> 
+      filter(Season == 2025,
+             Orchard %in% input$Orchards) |>
+      left_join(PhytoAssSummary, by = "GraderBatchMPILotID") |>
+      mutate(DefectQty = replace_na(DefectQty,0),
+             ExcludedMPILot = if_else(DefectQty > 0, 1, 0)) |>
+      group_by(Orchard, `Production site`) |>
+      summarise(`No of MPI lots` = n(),
+                `No of excluded lots` = sum(ExcludedMPILot),
+                .groups = "drop") |>
+      mutate(PropExcludedLots = `No of excluded lots`/`No of MPI lots`)
+    
+    DT:: datatable(ExcludedLotsTally |>
+                     mutate(PropExcludedLots = scales::percent(PropExcludedLots, 0.01)), 
+                   options = list(scrollX = TRUE),
+                   escape = FALSE,
+                   rownames = FALSE)
+  })
+  
+  output$PestInterceptions <- renderPlot({
+    #req(credentials()$user_auth)
+    
+    PhytoByPestInterception <- PhytoAss |>
+      filter(Season == 2025) |>
+      group_by(GraderBatchMPILotID,Defect) |>
+      summarise(DefectQty = sum(DefectQty),
+                .groups = "drop") |>
+      left_join(MPILots, by = "GraderBatchMPILotID") |>
+      filter(Orchard %in% input$Orchards) |>
+      group_by(Orchard,`Production site`,Defect) |>
+      summarise(DefectQty = sum(DefectQty),
+                .groups = "drop") |>
+      mutate(PlotLabel = str_c(Orchard," ",`Production site`))
+    
+    if(nrow(PhytoByPestInterception) > 0) { 
       
       PhytoByPestInterception |>
         ggplot(aes(x=Defect, y=DefectQty)) +
@@ -1270,18 +1372,18 @@ server <- function(input, output, session) {
               legend.title = element_text(size = 14),
               strip.text = element_text(margin = margin(b=10), size = 14))
       
-      } else {
-        tibble(x = c(0,1), y = c(0,1)) |>
-          ggplot(aes(x = x, y = y)) +
-          annotate("text", x=0.5, y=0.5, label = "No interceptions yet", 
-                   size = 20, colour = "#526280") +
-          theme_void() +
-          theme(plot.background = element_rect(fill = "#F7F1DF", colour = "#F7F1DF"))
-      }
-        
-        
-        })
-
+    } else {
+      tibble(x = c(0,1), y = c(0,1)) |>
+        ggplot(aes(x = x, y = y)) +
+        annotate("text", x=0.5, y=0.5, label = "No interceptions yet", 
+                 size = 20, colour = "#526280") +
+        theme_void() +
+        theme(plot.background = element_rect(fill = "#F7F1DF", colour = "#F7F1DF"))
+    }
+    
+    
+  })
+  
 }
 # Run the application 
 shinyApp(ui = ui, server = server)
