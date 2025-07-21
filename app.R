@@ -28,7 +28,7 @@ user_base <- tibble(
 #=================================SQL function==================================
 
 con <- DBI::dbConnect(odbc::odbc(),    
-                      Driver = "SQLServer", #"ODBC Driver 18 for SQL Server", #"SQLServer", #
+                      Driver = "SQLServer", #"ODBC Driver 18 for SQL Server", 
                       Server = "abcrepldb.database.windows.net",  
                       Database = "ABCPackerRepl",   
                       UID = "abcadmin",   
@@ -872,7 +872,8 @@ ui <- dashboardPage(
                          ),
                          fluidRow(
                            box(title = "RTEs packed",width = 12, 
-                               DT::dataTableOutput("RTESummary"))
+                               DT::dataTableOutput("RTESummary")),
+                           downloadButton("RTEDownload", "download table", class = "butt1")
                          )
                 ),
                 tabPanel("Defect plots",
@@ -1636,6 +1637,58 @@ server <- function(input, output, session) {
     
     
   })
+  
+  ##################################################################################
+  #                            Down load button                                    #
+  ############################# RTE  Summary   #####################################
+  
+  RTESumTable <- reactive({ 
+    #req(credentials()$user_auth)
+    
+    PDMod <- PoolDefinition |>
+      mutate(Pool = str_sub(`Pool description`, 15, -1),
+             `Pool description` = if_else(Pool %in% c(0,140,145,160,165),
+                                          "Mixed",
+                                          as.character(Pool))) |>
+      filter(Pool != 52)
+    
+    RTEs <- RTEsFromFieldBins |>
+      bind_rows(RTEsFromRepack) |>
+      bind_rows(RTEsFromPresize)
+    
+    RTEsFFBWithPools <- RTEs |>
+      filter(Season == 2025) |>
+      left_join(PDMod |> select(c(ProductID,`Pool description`)),
+                by = "ProductID")
+    
+    RTEsFFBWithPools |>
+      filter(Orchard %in% input$Orchards) |>
+      group_by(GraderBatchID, GraderBatchNo,Grower,RPIN,Orchard,`Production site`,`Pool description`) |>
+      summarise(RTEs = sum(RTEs, na.rm=T),
+                .groups = "drop") |>
+      pivot_wider(id_cols = c(GraderBatchID, GraderBatchNo,Grower,RPIN,Orchard,`Production site`),
+                  names_from = `Pool description`,
+                  values_from = RTEs,
+                  values_fill = 0) |>
+      rowwise() |>
+      mutate(TotalRTEs = sum(c_across(`58`:Mixed))) |>
+      left_join(BinsTipped, by = "GraderBatchID") |>
+      mutate(RTEsPerBin = TotalRTEs/BinQty) |>
+      filter(!is.na(BinQty)) |>
+      select(-c(GraderBatchID)) |>
+      arrange(GraderBatchNo)
+    
+  })  
+  
+  
+  output$RTEDownload <- downloadHandler(
+    filename = function() {
+      paste0("RTESummary-",Sys.Date(),".csv")
+    },
+    content = function(file) {
+      write.csv(RTESumTable(), file)
+    }
+  )
   
   
   #==================================Defect Plot==================================
