@@ -28,7 +28,7 @@ user_base <- tibble(
 #=================================SQL function==================================
 
 con <- DBI::dbConnect(odbc::odbc(),    
-                      Driver = "SQLServer", #"ODBC Driver 18 for SQL Server", 
+                      Driver = "SQLServer",#"ODBC Driver 18 for SQL Server", #
                       Server = "abcrepldb.database.windows.net",  
                       Database = "ABCPackerRepl",   
                       UID = "abcadmin",   
@@ -36,629 +36,32 @@ con <- DBI::dbConnect(odbc::odbc(),
                       Port = 1433
 )
 
-BinDelivery <- DBI::dbGetQuery(con, 
-                               "SELECT 
-	                                    SeasonDesc AS Season
-	                                    ,bd.BinDeliveryID
-	                                    ,BinDeliveryNo AS [Bin delivery No]
-	                                    ,FarmCode AS RPIN
-	                                    ,FarmName AS Orchard
-	                                    ,cto.CompanyName AS Grower
-	                                    ,sbt.SubdivisionCode AS [Production site]
-  										                ,fbt.BlockCode AS [Management area]
-	                                    ,HarvestDate AS [Harvest Date]
-	                                    ,ReceivedDate AS [Received date]
-	                                    ,bint.[Bins received] 
-	                                    ,COALESCE([Bins in process],0) AS [Bins in process]
-	                                    ,NoOfBins - COALESCE([Bins in process],0) AS [Bins currently in storage]
-	                                    ,MaturityCode [Submission profile]
-	                                    ,PickNoDesc AS [Pick No]
-	                                    ,cts.CompanyName AS [Storage site]
-	                                    ,CASE
-		                                      WHEN StorageTypeID = 4 THEN 'CA'
-		                                      ELSE 'RA'
-	                                    END AS [Storage type]
-	                                    ,CASE
-		                                      WHEN StorageTypeID = 6 THEN 'No 1-MCP applied'
-		                                      ELSE '1-MCP applied'
-	                                    END AS SmartFreshed
-                                  FROM ma_Bin_DeliveryT bd
-                                  LEFT JOIN
-										                  (
-										                  SELECT 
-											                    BinDeliveryID
-											                    ,COUNT(BinID) AS [Bins Received]
-										                  FROM ma_BinT
-										                  GROUP BY BinDeliveryID
-										                  ) AS bint
-								                  ON bint.BinDeliveryID = bd.BinDeliveryID
-								                  LEFT JOIN
-	                                    (
-	                                    SELECT 
-		                                      BinDeliveryID
-		                                      ,SUM(BinQty) AS [Bins in process]
-	                                    FROM ma_Bin_UsageT AS bu
-	                                    WHERE bu.GraderBatchID IS NOT NULL
-	                                    GROUP BY BinDeliveryID
-	                                    ) AS bt
-                                  ON bt.BinDeliveryID = bd.BinDeliveryID
-                                  INNER JOIN
-	                                    sw_SeasonT AS st
-                                  ON st.SeasonID = bd.SeasonID
-                                  INNER JOIN
-	                                    sw_FarmT AS ft
-                                  ON ft.FarmID = bd.FarmID
-                                  INNER JOIN
-	                                    sw_Farm_BlockT AS fbt
-                                  ON fbt.BlockID = bd.BlockID
-                                  INNER JOIN
-	                                    sw_SubdivisionT AS sbt
-                                  ON sbt.SubdivisionID = fbt.SubdivisionID
-                                  INNER JOIN
-	                                    sw_MaturityT AS mt
-                                  ON mt.MaturityID = bd.MaturityID
-                                  INNER JOIN
-	                                    sw_Pick_NoT AS pnt
-                                  ON pnt.PickNoID = bd.PickNoID
-                                  INNER JOIN
-										                  sw_CompanyT AS cts
-                                  ON cts.CompanyID = bd.FirstStorageSiteCompanyID
-                                  INNER JOIN
-										                  sw_CompanyT AS cto
-                                  ON cto.CompanyID = ft.GrowerCompanyID
-                                  WHERE PresizeFlag = 0")
+BinDelivery <- DBI::dbGetQuery(con, "SELECT * FROM shiny_Bin_DeliveryV")
 
-GraderBatch <- DBI::dbGetQuery(con,
-                               "SELECT 
-                                  gb.GraderBatchID
-                                  ,gb.GraderBatchNo AS [Grader Batch]
-                                  ,SeasonDesc AS Season
-                                  ,cto.CompanyName AS Grower
-                                  ,FarmCode AS RPIN
-                                  ,FarmName AS Orchard
-                                  ,SubdivisionCode AS [Production site]
-                                  ,HarvestDate AS [Harvest date]
-                                  ,PackDate AS [Pack date]
-                                  ,bu.[Bins tipped]  
-                                  ,ctp.CompanyName AS [Packing site]
-                                  ,gb.InputKgs AS [Input kgs]
-                                  ,COALESCE(gb.WasteOtherKgs,0) + COALESCE(jkg.JuiceKgs,0) + COALESCE(skg.SampleKgs,0) AS [Reject kgs]
-                                  ,CASE
-                                  WHEN ClosedDateTime IS NULL THEN 0
-                                  ELSE 1
-                                  END AS [Batch closed]
-                                FROM ma_Grader_BatchT AS gb
-                                INNER JOIN
-                                  sw_SeasonT AS st
-                                ON st.SeasonID = gb.SeasonID
-                                INNER JOIN
-                                  sw_FarmT AS ft
-                                ON ft.FarmID = gb.FarmID
-                                INNER JOIN
-                                  sw_SubdivisionT AS sbt
-                                ON sbt.SubdivisionID = gb.SubdivisionID
-                                LEFT JOIN
-                                  sw_MaturityT AS mt
-                                ON mt.MaturityID = gb.MaturityID
-                                INNER JOIN
-                                  sw_Pick_NoT AS pnt
-                                ON pnt.PickNoID = gb.PickNoID
-                                INNER JOIN
-                                  sw_CompanyT AS ctp
-                                ON ctp.CompanyID = gb.PackingCompanyID
-                                INNER JOIN
-                                  sw_CompanyT AS cto
-                                ON cto.CompanyID = ft.GrowerCompanyID
-                                /* Juice Kgs */
-                                LEFT JOIN
-                                  (
-                                  SELECT
-                                    PresizeOutputFromGraderBatchID AS GraderBatchID,
-                                    SUM(TotalWeight) AS JuiceKgs
-                                  FROM ma_Bin_DeliveryT AS bd
-                                  INNER JOIN
-                                    sw_ProductT AS pr
-                                  ON pr.ProductID = bd.PresizeProductID
-                                  INNER JOIN
-                                    sw_GradeT AS gt
-                                  ON gt.GradeID = pr.GradeID
-                                  WHERE gt.JuiceFlag = 1
-                                  GROUP BY PresizeOutputFromGraderBatchID
-                                  ) AS jkg
-                                ON jkg.GraderBatchID = gb.GraderBatchID
-                                /* Sample Kgs */
-                                LEFT JOIN
-                                  (
-                                  SELECT 
-                                    GraderBatchID,
-                                    NoOfUnits*NetFruitWeight AS SampleKgs
-                                  FROM ma_Pallet_DetailT AS pd
-                                  INNER JOIN
-                                    sw_ProductT AS pr
-                                  ON pr.ProductID = pd.ProductID
-                                  WHERE pr.SampleFlag = 1
-                                  ) AS skg
-                                ON skg.GraderBatchID = gb.GraderBatchID
-                                /* Bins tipped */
-                                LEFT JOIN
-                                  (
-                                  SELECT 
-                                    GraderBatchID,
-                                    SUM(BinQty) AS [Bins tipped]
-                                      FROM ma_Bin_UsageT
-                                      WHERE GraderBatchID IS NOT NULL
-                                      GROUP BY GraderBatchID
-                                    ) AS bu
-                                  ON bu.GraderBatchID = gb.GraderBatchID")
+BinsRemaining <- DBI::dbGetQuery(con, "SELECT * FROM ma_Bins_RemainingV")
 
-PoolDefinition <- DBI::dbGetQuery(con,
-                                  "SELECT 
-	                                      DISTINCT pr.ProductID
-	                                      ,pr.ProductDesc AS [Product description]
-	                                      ,fpt.PoolDesc AS [Pool description]
-                                    FROM sw_ProductT AS pr
-                                    INNER JOIN
-	                                      sw_Tube_TypeT AS ttt
-                                    ON ttt.TubeTypeID = pr.TubeTypeID
-                                    INNER JOIN
-	                                      sw_Tube_DiameterT AS tdt
-                                    ON tdt.TubeDiameterID = ttt.TubeDiameterID
-                                    INNER JOIN
-	                                      fi_PoolT AS fpt
-                                    ON fpt.TubeDiameterID = tdt.TubeDiameterID
-                                    INNER JOIN
-	                                      sw_GradeT AS gt
-                                    ON gt.GradeID = pr.GradeID
-                                    WHERE JuiceFlag = 0
-                                    AND SampleFlag = 0")
+GraderBatch <- DBI::dbGetQuery(con, "SELECT * FROM shiny_Grader_BatchV")
 
-RTEsFromFieldBins <- DBI::dbGetQuery(con,
-                                     "SELECT
-	pd.GraderBatchID 
-	,gb.GraderBatchNo
-	,pd.PalletDetailID 
-	,pd.ProductID 
-	,COUNT(DISTINCT ca.CartonNo) AS NoOfUnits 
-	,COUNT(DISTINCT ca.CartonNo) * pr.TubesPerCarton * ttt.RTEConversion AS RTEs 
-	,COUNT(DISTINCT ca.CartonNo) * pr.NetFruitWeight AS Kgs 
-	,se.SeasonDesc AS Season 
-	,cog.CompanyName AS Grower
-	,fa.FarmCode AS RPIN
-	,fa.FarmName AS Orchard
-	,sb.SubdivisionCode AS [Production site]
-	,'FromFieldBins' AS RTESource
-FROM  ma_PalletT AS pa 
-INNER JOIN
-	ma_Pallet_DetailT AS pd 
-ON pd.PalletID = pa.PalletID 
-INNER JOIN
-	ma_Grader_BatchT AS gb 
-ON gb.GraderBatchID = pd.GraderBatchID 
-INNER JOIN
-	sw_SeasonT AS se
-ON se.SeasonID = pa.SeasonID
-INNER JOIN
-	sw_CompanyT AS cog
-ON cog.CompanyID = gb.GrowerCompanyID
-INNER JOIN
-	sw_FarmT AS fa
-ON fa.FarmID = gb.FarmID
-INNER JOIN
-	sw_SubdivisionT AS sb 
-ON sb.SubdivisionID = gb.SubdivisionID 
-INNER JOIN
-	ma_CartonT AS ca 
-ON ca.PalletDetailID = pd.PalletDetailID 
-INNER JOIN
-	sw_ProductT AS pr
-ON pr.ProductID = pd.ProductID
-INNER JOIN	
-	sw_Tube_TypeT AS ttt
-ON ttt.TubeTypeID = pr.TubeTypeID
-INNER JOIN
-	sw_GradeT AS gt
-ON gt.GradeID = pr.GradeID
-LEFT JOIN
-	ma_Bin_DeliveryT AS bi 
-ON bi.BinDeliveryID = ca.BinDeliveryID 
-LEFT JOIN
-	sw_Farm_BlockT AS fb 
-ON fb.BlockID = bi.BlockID
-WHERE gb.PresizeInputFlag = 0 
-AND pr.SampleFlag = 0
-AND ca.PalletDamageID IS NULL
-GROUP BY 
-	pd.GraderBatchID 
-	,gb.GraderBatchNo
-	,pd.PalletDetailID 
-	,pd.ProductID 
-	,ttt.RTEConversion 
-	,pr.TubesPerCarton 
-	,pr.NetFruitWeight 
-	,se.SeasonDesc 
-	,cog.CompanyName
-	,fa.FarmCode 
-	,fa.FarmName 
-	,sb.SubdivisionCode 
-UNION ALL
-SELECT 
-	pd.GraderBatchID 
-	,gb.GraderBatchNo
-	,pd.PalletDetailID 
-	,pd.ProductID
-	,pd.NoOfUnits AS NoOfUnits 
-	,SUM(CAST((ebd.KGWeight / ttt.PresizeAvgTubeWeight) * ttt.RTEConversion AS numeric(10, 2))) AS RTEs 
-	,SUM(ebd.KGWeight) AS Kgs 
-	,se.SeasonDesc AS Season 
-	,cog.CompanyName AS Grower
-	,fa.FarmCode AS RPIN
-	,fa.FarmName AS Orchard
-	,sb.SubdivisionCode AS [Production site]
-	,'FromFieldBins' AS RTESource
-FROM  ma_PalletT AS pa 
-INNER JOIN
-      ma_Pallet_DetailT pd 
-ON pd.PalletID = pa.PalletID 
-INNER JOIN
-      ma_Grader_BatchT gb 
-ON gb.GraderBatchID = pd.GraderBatchID 
-INNER JOIN
-	sw_SeasonT AS se
-ON se.SeasonID = pa.SeasonID
-INNER JOIN
-	sw_CompanyT AS cog
-ON cog.CompanyID = gb.GrowerCompanyID
-INNER JOIN
-	sw_FarmT AS fa
-ON fa.FarmID = gb.FarmID
-INNER JOIN
-      sw_SubdivisionT sb 
-ON sb.SubdivisionID = gb.SubdivisionID 
-INNER JOIN
-       ma_Export_Bin_DetailT ebd 
-ON ebd.PalletDetailID = pd.PalletDetailID 
-INNER JOIN
-	sw_ProductT AS pr
-ON pr.ProductID = pd.ProductID
-INNER JOIN
-	sw_Tube_TypeT AS ttt
-ON ttt.TubeTypeID = pr.TubeTypeID
-WHERE gb.PresizeInputFlag = 0 
-AND pr.SampleFlag = 0
-GROUP BY 
-	pd.GraderBatchID 
-	,gb.GraderBatchNo
-	,pd.PalletDetailID 
-	,pd.ProductID 
-	,pd.NoOfUnits 
-	,se.SeasonDesc
-	,cog.CompanyName
-	,fa.FarmCode 
-	,fa.FarmName 
-	,sb.SubdivisionCode 
-")
+PoolDefinition <- DBI::dbGetQuery(con, "SELECT * FROM shiny_Pool_DefintionV")
 
-RTEsFromPresize <- DBI::dbGetQuery(con,
-                                   "SELECT 
-	bd.PresizeOutputFromGraderBatchID AS GraderBatchID 
-	,gb.GraderBatchNo
-	,NULL AS PalletDetailID
-	,bd.PresizeProductID AS ProductID
-	,NULL AS NoOfUnits
-	,CAST(ROUND(bd.TotalWeight / ttt.PresizeAvgTubeWeight, 0) * ttt.RTEConversion AS numeric(10, 2)) AS RTEs 
-	,bd.TotalWeight AS Kgs 
-	,se.SeasonDesc AS Season 
-	,cog.CompanyName AS Grower
-	,fa.FarmCode AS RPIN
-	,fa.FarmName AS Orchard
-	,sb.SubdivisionCode AS [Production site] 
-	,'Presize' AS RTESource
-FROM  ma_Bin_DeliveryT AS bd 
-INNER JOIN
-	ma_Grader_BatchT AS gb 
-ON gb.GraderBatchID = bd.PresizeOutputFromGraderBatchID 
-INNER JOIN
-	sw_ProductT AS pr 
-ON pr.ProductID = bd.PresizeProductID
-INNER JOIN 
-	sw_Tube_TypeT AS ttt
-ON ttt.TubeTypeID = pr.TubeTypeID
-INNER JOIN
-	sw_GradeT AS gt
-ON gt.GradeID = pr.GradeID
-INNER JOIN
-	sw_SeasonT AS se
-ON se.SeasonID = gb.SeasonID
-INNER JOIN
-	sw_CompanyT AS cog
-ON cog.CompanyID = gb.GrowerCompanyID
-INNER JOIN
-	sw_FarmT AS fa
-ON fa.FarmID = gb.FarmID
-INNER JOIN
-    sw_SubdivisionT AS sb 
-ON sb.SubdivisionID = gb.SubdivisionID
-WHERE bd.PresizeFlag = 1 
-AND gt.JuiceFlag = 0")
-
-RTEsFromRepack <- DBI::dbGetQuery(con,
-                                  "SELECT 
-	re.GraderBatchID 
-	,gb.GraderBatchNo
-	,pd.PalletDetailID 
-	,pd.ProductID
-	,SUM(cam.NoOfUnits) AS NoOfUnits 
-	,SUM(cam.RTEs) AS RTEs
-	,SUM(cam.Kgs) AS Kgs
-	,se.SeasonDesc AS Season 
-	,cog.CompanyName AS Grower
-	,fa.FarmCode AS RPIN
-	,fa.FarmName AS Orchard
-	,sb.SubdivisionCode AS [Production site]
-	,'Repack' AS RTESource
-FROM  dbo.ma_RepackT AS re 
-INNER JOIN
-   ma_Repack_Input_CartonT AS ca 
-ON ca.RepackID = re.RepackID 
-INNER JOIN
-   (
-   SELECT 
-		ric.RepackInputCartonID, 
-		CAST(CASE 
-				WHEN ric.FromExportBinDetailID IS NULL THEN 1 
-				ELSE 0 
-			END AS numeric(10, 2)) AS NoOfUnits, 
-		CAST(CASE 
-				WHEN ric.FromExportBinDetailID IS NULL THEN pr.TubesPerCarton * ttt.RTEConversion 
-				ELSE (ebd.KGWeight / ttt.PresizeAvgTubeWeight) * ttt.RTEConversion 
-			END AS numeric(10, 2)) AS RTEs, 
-		CASE 
-			WHEN ric.FromExportBinDetailID IS NULL THEN pr.NetFruitWeight 
-			ELSE ebd.KGWeight 
-		END AS Kgs
-	FROM  dbo.ma_Repack_Input_CartonT AS ric 
-	INNER JOIN
-		ma_Pallet_DetailT AS pd 
-	ON pd.PalletDetailID = ric.FromPalletDetailID 
-	INNER JOIN
-		sw_ProductT AS pr
-	ON pr.ProductID = pd.ProductID
-	INNER JOIN 
-		sw_Tube_TypeT AS ttt
-	ON ttt.TubeTypeID = pr.TubeTypeID
-	LEFT JOIN
-		ma_Export_Bin_DetailT AS ebd 
-	ON ebd.ExportBinDetailID = ric.FromExportBinDetailID 
-	LEFT JOIN
-		(
-		SELECT 
-			ExportBinID, 
-			SUM(KGWeight) AS TotalExportBinWeight
-		FROM ma_Export_Bin_DetailT
-		GROUP BY ExportBinID
-		) AS eto 
-	ON eto.ExportBinID = ebd.ExportBinID
-	) AS cam
-ON cam.RepackInputCartonID = ca.RepackInputCartonID 
-INNER JOIN
-   ma_Pallet_DetailT AS pd 
-ON pd.PalletDetailID = ca.FromPalletDetailID 
-INNER JOIN
-   ma_Grader_BatchT AS gb 
-ON gb.GraderBatchID = re.GraderBatchID 
-INNER JOIN
-	sw_CompanyT AS cog
-ON cog.CompanyID = gb.GrowerCompanyID
-INNER JOIN
-	sw_FarmT AS fa
-ON fa.FarmID = gb.FarmID
-INNER JOIN
-   sw_SubdivisionT AS sb 
-ON sb.SubdivisionID = gb.SubdivisionID
-INNER JOIN
-	sw_SeasonT AS se
-ON se.SeasonID = re.SeasonID
-WHERE (gb.PresizeInputFlag = 0)
-GROUP BY 
-	re.GraderBatchID
-	,gb.GraderBatchNo
-	,cog.CompanyName
-	,fa.FarmCode 
-	,fa.FarmName 
-	,sb.SubdivisionCode 
-	,pd.PalletDetailID
-	,pd.ProductID
-	,se.SeasonDesc")
+RTEsFromPTV <- DBI::dbGetQuery(con, "SELECT * FROM fi_Pool_TransactionV")
 
 BinsTipped <- DBI::dbGetQuery(con,
                               "SELECT 
-	GraderBatchID
-	,SUM(BinQty) AS BinQty
-FROM ma_Bin_UsageT
-WHERE GraderBatchID IS NOT NULL
-GROUP BY GraderBatchID")
+	                                  GraderBatchID
+	                                  ,SUM(BinQty) AS BinQty
+                              FROM ma_Bin_UsageT
+                              WHERE GraderBatchID IS NOT NULL
+                              GROUP BY GraderBatchID")
 
-DefectAssessment <- DBI::dbGetQuery(con,
-                                    "WITH defAss (Season,RPIN,Orchard,[Production site],[Management area],GraderBatchID,Defect,DefectQty)
-                                    AS
-	                                      (
-	                                      SELECT 
-		                                        SeasonDesc AS Season,
-		                                        FarmCode AS RPIN,
-		                                        FarmName AS Orchard,
-		                                        SubdivisionCode AS [Production site],
-		                                        BlockCode AS [Management area],
-		                                        GraderBatchID,
-		                                        Defect,
-		                                        SUM(DefectQty) AS DefectQty
-	                                      FROM qa_Assessment_DefectT AS qad
-	                                      INNER JOIN
-		                                        qa_AssessmentT AS qa
-	                                      ON qa.AssessmentID = qad.AssessmentID
-	                                      INNER JOIN
-		                                        qa_DefectT AS qd
-	                                      ON qd.DefectID = qad.DefectID
-	                                      INNER JOIN
-		                                        sw_FarmT AS ft
-	                                      ON ft.FarmID = qa.FarmID
-	                                      INNER JOIN
-		                                        sw_Farm_BlockT AS fbt
-	                                      ON fbt.BlockID = qa.BlockID
-	                                      INNER JOIN
-		                                        sw_SubdivisionT AS sbt
-	                                      ON sbt.SubdivisionID = fbt.SubdivisionID
-	                                      INNER JOIN
-		                                        sw_SeasonT AS st
-	                                      ON st.SeasonID = qa.SeasonID
-	                                      WHERE TemplateID IN (13,14,28)
-	                                      GROUP BY SeasonDesc,FarmCode,FarmName,SubdivisionCode,BlockCode,GraderBatchID,Defect 
-	                                      ) 
-                                    SELECT 
-	                                      Season,
-	                                      RPIN,
-	                                      Orchard,
-	                                      [Production site],
-	                                      [Management area],
-	                                      da.GraderBatchID,
-	                                      Defect,
-	                                      DefectQty,
-	                                      SampleQty
-                                    FROM defAss AS da
-                                    LEFT JOIN
-	                                      (
-	                                      SELECT 
-		                                        GraderBatchID,
-		                                        SUM(SampleQty) AS SampleQty
-	                                      FROM qa_AssessmentT
-	                                      WHERE TemplateID IN (13,14,28)
-	                                      GROUP BY GraderBatchID
-	                                      ) AS sampq
-                                    ON sampq.GraderBatchID = da.GraderBatchID")
+DefectAssessment <- DBI::dbGetQuery(con, "SELECT * FROM shiny_Defect_AssessmentV")
 
-PhytoAss <- DBI::dbGetQuery(con,
-                            "SELECT 
-	                              AssessmentDefectID,
-	                              qad.AssessmentID,
-	                              Season,
-	                              GraderBatchID,
-	                              GraderBatchMPILotID,
-	                              Defect,
-	                              DefectQty,
-	                              SampleQty,
-	                              dt.MktDefectCode	
-                            FROM qa_Assessment_DefectT AS qad
-                            INNER JOIN
-	                              (
-	                              SELECT
-		                                DefectID,
-		                                Defect,
-		                                MktDefectCode
-	                              FROM qa_DefectT
-	                              ) AS dt
-                            ON dt.DefectID = qad.DefectID
-                            INNER JOIN
-	                              (
-	                              SELECT
-		                                AssessmentID,
-		                                GraderBatchID,
-		                                TemplateID,
-		                                SampleQty,
-		                                SeasonID,
-		                                GraderBatchMPILotID
-	                              FROM qa_AssessmentT
-	                              ) AS qa
-                            ON qa.AssessmentID = qad.AssessmentID
-                            INNER JOIN
-	                              (
-	                              SELECT
-		                                SeasonID,
-		                                SeasonDesc AS Season
-	                              FROM sw_SeasonT
-	                              ) AS st
-                            ON st.SeasonID = qa.SeasonID
-                            INNER JOIN
-	                              (
-	                              SELECT 
-		                                DISTINCT pmr.PIPReqID,
-		                                pipr.MktDefectCode,
-		                                pipr.DeclarationDesc
-	                              FROM pip_Market_RequirementT AS pmr
-	                              LEFT JOIN
-		                                (
-		                                SELECT 
-			                                  MktDefectCode,
-			                                  prp.PIPReqID,
-			                                  PercentLimit,
-			                                  ThresholdQty,
-			                                  DeclarationDesc
-		                                FROM pip_Requirement_PestT AS prp
-		                                LEFT JOIN
-			                                  pip_RequirementT AS pr
-		                                ON pr.PIPReqID = prp.PIPReqID
-		                                ) AS pipr
-	                              ON pipr.PIPReqID = pmr.PIPReqID
-	                              WHERE PIPMarketCode IN ('CHN','TWN')
-	                              AND ThresholdQty = 0.0000
-	                              ) pip
-                            ON pip.MktDefectCode = dt.MktDefectCode
-                            WHERE dt.MktDefectCode IS NOT NULL
-                            AND TemplateID = 10")
+PhytoAss <- DBI::dbGetQuery(con, "SELECT * FROM shiny_Phyto_AssessmentV")
 
-MPILots <- DBI::dbGetQuery(con,
-                           "SELECT 
-	                              SeasonDesc AS Season,
-	                              GraderBatchMPILotID,
-	                              gbml.GraderBatchID,
-	                              ctg.CompanyName AS Grower,
-	                              FarmCode AS RPIN,
-	                              FarmName AS Orchard,
-	                              SubdivisionCode AS [Production site],
-	                              ctp.CompanyName AS [Packing site]
-                            FROM ma_Grader_Batch_MPI_LotT AS gbml
-                            INNER JOIN
-	                              ma_Grader_BatchT AS gb
-                            ON gb.GraderBatchID = gbml.GraderBatchID
-                            INNER JOIN
-	                              sw_FarmT AS ft
-                            ON ft.FarmID = gb.FarmID
-                            INNER JOIN
-	                              sw_SubdivisionT AS sbt
-                            ON sbt.SubdivisionID = gb.SubdivisionID
-                            INNER JOIN
-	                              sw_CompanyT AS ctg
-                            ON ctg.CompanyID = gb.GrowerCompanyID
-                            INNER JOIN
-	                              sw_CompanyT AS ctp
-                            ON ctp.CompanyID = gb.PackingCompanyID
-                            INNER JOIN
-	                              sw_SeasonT AS st
-                            ON st.SeasonID = gb.SeasonID")
-
-BinUsage <- DBI::dbGetQuery(con,
-                            "WITH BinsTipped_CTE (BinDeliveryID, BinQty, GraderBatchID, BinsTipped)
-                            AS
-                            (	
-                            SELECT 
-                                BinDeliveryID,
-                                BinQty,
-                                bu.GraderBatchID,
-                                CASE
-                                  WHEN ClosedDateTime IS NOT NULL THEN 'Tipped'
-                                  ELSE 'In process'
-                                END AS BinsTipped
-                            FROM ma_Bin_UsageT AS bu
-                            INNER JOIN
-                                ma_Grader_batchT AS gb
-                            ON gb.GraderBatchID = bu.GraderBatchID
-                            WHERE bu.GraderBatchID IS NOT NULL
-                            )
-                            SELECT 
-                                BinDeliveryID,
-                                BinsTipped,
-                                SUM(BinQty) AS BinQty
-                            FROM BinsTipped_CTE
-                            GROUP BY BinDeliveryID, BinsTipped")
-
+MPILots <- DBI::dbGetQuery(con, "SELECT * FROM shiny_MPI_LotsV")
+                           
+BinUsage <- DBI::dbGetQuery(con, "SELECT * FROM shiny_Bin_UsageV")
+                           
 GrowerOrchard <- DBI::dbGetQuery(con,
                                  "SELECT 
                                       FarmName AS Orchard,
@@ -669,6 +72,7 @@ GrowerOrchard <- DBI::dbGetQuery(con,
                                   ON ct.CompanyID = ft.GrowerCompanyID
                                   WHERE ft.ActiveFlag = 1")
 
+BinMovements <- DBI::dbGetQuery(con, "SELECT * FROM ma_Bin_TransfersV")
 
 DBI::dbDisconnect(con)
 
@@ -696,18 +100,20 @@ names(GrowerOrchardList) <- tibble(Growers = Growers) |>
 
 ## Specialty Permissions
 
-Havelock <- list(Growers = c("ROLP 1", "Rakete"),
-                 Orchards=c("Stock Roads","Home Block","Manahi","Te Aute Road North","Te Aute Road South","Raukawa","Lobb"))
-Hastings <- list(Growers = c("ROLP 1", "ROLP 2", "Heretaunga Orchards Limited Partnership","Lawn Road Orchard Limited"),
-                 Orchards = c("Napier Road North","Napier Road Central","Napier Road South","Haumoana","Ormond Rd","Lawn Road"))
-Maraekakaho <- list(Growers = c("Mana Orchards Limited Partnership","Pioneer Capital Molly Limited","Rockit Orchards Limited"),
-                    Orchards = c("Mana1","Mana2","Pioneer Orchard","Valley Road"))
+Havelock <- list(Growers = c("ROLP 1", "Rakete","Lawn Road Orchard Limited"),
+                 Orchards=c("Stock Roads","Home Block","Manahi","Te Aute Road North","Te Aute Road South","Raukawa","Lobb",
+                            "Napier Road North","Napier Road Central","Napier Road South","Haumoana","Lawn Road"))
+Maraekakaho <- list(Growers = c("Mana Orchards Limited Partnership","Pioneer Capital Molly Limited","Rockit Orchards Limited",
+                                "Heretaunga Orchards Limited Partnership"),
+                    Orchards = c("Mana1","Mana2","Pioneer Orchard","Valley Road","Ormond Rd"))
 Crownthorpe <- list(Growers = c("Rockit Orchards Limited","Heretaunga Orchards Limited Partnership","Rakete","ROLP 1","ROLP 2"),
                     Orchards = c("Crown","Lowry Heretaunga","Lowry","Rangi2","Sim1","Sim2","Steel","Wharerangi Orchard","Omahu"))
-RMS <- list(Growers = c("ROLP 1","ROLP 2","Rakete","Heretaunga Orchards Limited Partnership","Pioneer Capital Molly Limited","Rockit Orchards Limited"),
+Ceed <- list(Growers = c("ROLP 1","ROLP 2","Rakete","Heretaunga Orchards Limited Partnership","Pioneer Capital Molly Limited",
+                         "Rockit Orchards Limited","Mana Orchards Limited Partnership","Lawn Road Orchard Limited"),
             Orchards = c("Home Block","Raukawa","Te Aute Road North","Wharerangi Orchard","Stock Roads","Te Aute Road South",
                          "Napier Road South","Omahu","Haumoana","Napier Road Central","Napier Road North","Rangi2","Lobb","Sim1",
-                         "Steel","Manahi","Sim2","Crown","Ormond Rd","Lowry Heretaunga","Pioneer Orchard","Lowry","Valley Road"))
+                         "Steel","Manahi","Sim2","Crown","Ormond Rd","Lowry Heretaunga","Pioneer Orchard","Lowry","Valley Road",
+                         "Mana1","Mana2","Lawn Road"))
 RaketePlus <- list(Growers = c("Rakete","Heretaunga Orchards Limited Partnership","Te Arai Orchard Limited Partnership"),
                    Orchards = c("Sim1","Sim2","Steel","Manahi","Lobb","Ormond Rd","Crown","Lowry Heretaunga","Te Arai"))
 Goodwin <- list(Growers = c("Mana Orchards Limited Partnership","Lawn Road Orchard Limited"),
@@ -733,10 +139,9 @@ Punchbowl <- list(Grower = c("ROLP 1","ROLP 2","Longlands Orchard Limited Partne
 
 
 SpecialtyPermissions <- list(Havelock=Havelock,
-                             Hastings = Hastings,
                              Maraekakaho = Maraekakaho,
                              Crownthorpe = Crownthorpe,
-                             RMS = RMS,
+                             Ceed = Ceed,
                              RaketePlus=RaketePlus, 
                              Goodwin=Goodwin, 
                              Craigmore=Craigmore,
@@ -793,8 +198,10 @@ ui <- dashboardPage(
                          fluidRow(
                            box(title = "Bin summary by orchard",width = 12, 
                                DT::dataTableOutput("BinAccountingRPIN")),
+                           tags$p(strong("*Tipped - denotes tipped into Rockit export programme.")),
                            box(title = "Bin summary by poduction site",width = 12, 
-                               DT::dataTableOutput("BinAccountingProdSite"))
+                               DT::dataTableOutput("BinAccountingProdSite")),
+                           tags$p(strong("*Tipped - denotes tipped into Rockit export programme."))
                          )
                 ),
                 tabPanel("Bins received",
@@ -804,10 +211,32 @@ ui <- dashboardPage(
                            downloadButton("downloadReceived", "download table", class = "butt1")
                          )
                 ),
-                tabPanel("Bin storage by location and type",
-                         fluidRow(
-                           box(title = "Bin storage by RPIN",width = 12, 
-                               DT::dataTableOutput("StorageByRPIN"))
+                tabPanel("Bin storage",
+                         tabsetPanel(type = "tabs",
+                                     tabPanel("Bin storage by location and type",
+                                              fluidRow(
+                                                  box(title = "Bin storage by RPIN",width = 12,
+                                                      DT::dataTableOutput("StorageByRPIN"))
+                                              )
+                                     ),
+                                     tabPanel("Bins in storage",
+                                              fluidRow(
+                                                box(title = "Bins currently in storage",width = 12,
+                                                    DT::dataTableOutput("BinsRemainingByLoc")),
+                                                downloadButton("downloadBIS", "download table", class = "butt1")
+                                              )
+                                     ),
+                                     tabPanel("Bins sent to alternative* channels",
+                                              fluidRow(
+                                                box(title = "Alternative channel",width = 12,
+                                                    DT::dataTableOutput("BinsByAlternativeChannel")),
+                                                downloadButton("downloadAC", "download table", class = "butt1")
+                                              ),
+                                              fluidPage(
+                                                tags$p(strong("*Alternative channels are channels for class 1 fruit that do not go into the Rockit export programme")
+                                                       )
+                                              )
+                                     )
                          )
                 ),
                 tabPanel("Packout",
@@ -841,6 +270,8 @@ ui <- dashboardPage(
                                               ),
                                               fluidRow(
                                                 box(title = "Packout Batch summaries", width=12,
+                                                    tags$p(strong("The packouts stated in this table are preliminary and subject to normalisation and potential change"),
+                                                           style = "color: #a9342c"),
                                                     DT::dataTableOutput("POSummary")),
                                                 downloadButton("PackoutSummary", "download table", class = "butt1")
                                               )
@@ -864,15 +295,16 @@ ui <- dashboardPage(
                                      )
                          )
                 ),
-                tabPanel("RTEs packed",
+                tabPanel("RTE Tally",
                          fluidRow(
-                           tags$h2(strong("\t RTE packed"),style = "color: #a9342c"),
                            box(width=4, selectInput("RTEAgg", "select the level of aggregation", 
                                                     c("Batch", "Production site", "Orchard/RPIN","Grower")))
                          ),
                          fluidRow(
-                           box(title = "RTEs packed",width = 12, 
+                           box(title = "RTE Tally",width = 12, 
                                DT::dataTableOutput("RTESummary")),
+                           tags$p(strong("*The RTEs stated in the table below are unnormalised and may be adjusted depending on the packing location.
+                                         RTEs are only calculated on closed batches.")),
                            downloadButton("RTEDownload", "download table", class = "butt1")
                          )
                 ),
@@ -884,7 +316,7 @@ ui <- dashboardPage(
                            box(width = 12, plotOutput("defectHeatMap")),
                          ),
                          downloadButton(
-                           "downloadDefect", "download table"
+                           "DefectDownload", "download table",class = "butt1"
                          )
                 ),
                 tabPanel("Phytosanitary tracking",
@@ -981,37 +413,79 @@ server <- function(input, output, session) {
     mutate(across(.cols = c(`In process`,Tipped), ~replace_na(.,0))) |>
     select(-c(`Bins in process`))
   
+  BinsAlternate <- c(23,24,25,26,31,32,33)
+  BinsDamaged <- c(13:22,27:30,34)
+  
   output$BinAccountingRPIN <- DT::renderDataTable({
     #req(credentials()$user_auth)
     
     # Total for the bottom of the table
     
+    AlternateChannel <- c("Pickmee Fruit Company Ltd","Fern Ridge","Cedenco")
+    
+    DamagedBins <- BinsRemaining |> 
+      filter(Season == 2025,
+             !is.na(BinDamageID),
+             BinDamageID %in% BinsDamaged) |>
+      group_by(RPIN, Orchard) |>
+      summarise(`Damaged bins` = sum(BinQty, na.rm=T),
+                .groups = "drop")
+    
+    BinsRemainingRPIN <- BinsRemaining |> 
+      filter(Season == 2025,
+             !(BinDamageID %in% BinsDamaged)) |>
+      mutate(Channel = if_else(`Current storage site` %in% AlternateChannel,
+                               "Alternative",
+                               "Storage")) |>
+      group_by(RPIN, Orchard, Channel) |>
+      summarise(BinQty = sum(BinQty, na.rm=T),
+                .groups = "drop") |>
+      pivot_wider(id_cols = c(RPIN, Orchard),
+                  names_from = c(Channel),
+                  values_from = BinQty,
+                  values_fill = 0) |>
+      rename(`Alternative channel` = Alternative,
+             `Currently in storage` = Storage) |>
+      relocate(`Currently in storage`, .before = `Alternative channel`) |>
+      left_join(DamagedBins, by = c("RPIN","Orchard")) |>
+      mutate(`Damaged bins` = replace_na(`Damaged bins`,0))
+    
+    BRTotal <- BinsRemainingRPIN |>
+      filter(Orchard %in% input$Orchards) |> #c("Home Block","Wharerangi Orchard")) |> #
+      summarise(`Currently in storage` = sum(`Currently in storage`, na.rm=T),
+                `Alternative channel` = sum(`Alternative channel`, na.rm=T),
+                `Damaged bins` = sum(`Damaged bins`, na.rm=T))
+    
     RPINTotal <- BinDeliveryFull |>
-      filter(Orchard %in% input$Orchards,
+      filter(Orchard %in% input$Orchards, #c("Home Block","Wharerangi Orchard"), #
              Season == 2025) |>
-      select(c(RPIN, Orchard, `Bins received`,`In process`,Tipped,`Bins currently in storage`)) |>
+      select(c(RPIN, Orchard, `Bins received`,`In process`,Tipped)) |>
       summarise(`Received` = sum(`Bins received`),
                 `In process` = sum(`In process`),
-                Tipped = sum(Tipped),
-                `Currently in storage` = sum(`Bins currently in storage`)) |>
+                `Tipped*` = sum(Tipped)) |>
       mutate(RPIN = "Total",
              Orchard = "") |>
       relocate(RPIN, .before = `Received`) |>
-      relocate(Orchard, .after = RPIN)
+      relocate(Orchard, .after = RPIN) |>
+      bind_cols(BRTotal)
     
     # Define the table itself
     
     DT::datatable(BinDeliveryFull |>
-                    filter(Orchard %in% input$Orchards,
+                    filter(Orchard %in% input$Orchards, #c("Home Block","Wharerangi Orchard"), #
                            Season == 2025) |>
-                    select(c(RPIN, Orchard, `Bins received`,`In process`,Tipped,`Bins currently in storage`)) |>
+                    select(c(RPIN, Orchard, `Bins received`,`In process`,Tipped)) |>
                     group_by(RPIN, Orchard) |>
                     summarise(`Received` = sum(`Bins received`),
                               `In process` = sum(`In process`),
-                              Tipped = sum(Tipped),
-                              `Currently in storage` = sum(`Bins currently in storage`),
+                              `Tipped*` = sum(Tipped),
                               .groups = "drop") |>
-                    bind_rows(RPINTotal),
+                    ungroup() |>
+                    left_join(BinsRemainingRPIN, by =  c("RPIN", "Orchard")) |>
+                    bind_rows(RPINTotal) |>
+                    mutate(`Currently in storage` = replace_na(`Currently in storage`,0),
+                           `Alternative channel` = replace_na(`Alternative channel`,0),
+                           `Damaged bins` = replace_na(`Damaged bins`,0)),
                   options = list(scrollX = TRUE),
                   escape = FALSE,
                   rownames = FALSE)
@@ -1025,33 +499,73 @@ server <- function(input, output, session) {
     
     # Total for the bottom of the table
     
+    BinsDamaged <- c(13:22,27:30,34)
+    
+    DamagedBinsPS <- BinsRemaining |> 
+      filter(Season == 2025,
+             !is.na(BinDamageID),
+             BinDamageID %in% BinsDamaged) |>
+      group_by(RPIN, Orchard, `Production site`) |>
+      summarise(`Damaged bins` = sum(BinQty, na.rm=T),
+                .groups = "drop")
+    
+    AlternateChannel <- c("Pickmee Fruit Company Ltd","Fern Ridge","Cedenco")
+    
+    BinsRemainingPS <- BinsRemaining |> 
+      filter(Season == 2025,
+             !(BinDamageID %in% BinsDamaged)) |>
+      mutate(Channel = if_else(`Current storage site` %in% AlternateChannel,
+                               "Alternative",
+                               "Storage")) |>
+      group_by(RPIN, Orchard,`Production site`,Channel) |>
+      summarise(BinQty = sum(BinQty, na.rm=T),
+                .groups = "drop") |>
+      pivot_wider(id_cols = c(RPIN, Orchard, `Production site`),
+                  names_from = c(Channel),
+                  values_from = BinQty,
+                  values_fill = 0) |>
+      rename(`Alternative channel` = Alternative,
+             `Currently in storage` = Storage) |>
+      relocate(`Currently in storage`, .before = `Alternative channel`) |>
+      left_join(DamagedBinsPS, by = c("RPIN","Orchard","Production site")) |>
+      mutate(`Damaged bins` = replace_na(`Damaged bins`,0))
+    
+    BRTotalPS <- BinsRemainingPS |>
+      filter(Orchard %in% input$Orchards) |> #c("Home Block","Wharerangi Orchard")) |> #
+      summarise(`Currently in storage` = sum(`Currently in storage`, na.rm=T),
+                `Alternative channel` = sum(`Alternative channel`, na.rm=T),
+                `Damaged bins` = sum(`Damaged bins`, na.rm=T))
+    
     PSTotal <- BinDeliveryFull |>
-      filter(Orchard %in% input$Orchards, #c("Home Block"), #
+      filter(Orchard %in% input$Orchards, #c("Home Block","Wharerangi Orchard"), #
              Season == 2025) |>
-      select(c(RPIN, Orchard, `Production site`, `Bins received`,`In process`,Tipped,`Bins currently in storage`)) |>
+      select(c(RPIN, Orchard, `Production site`, `Bins received`,`In process`,Tipped)) |>
       summarise(`Received` = sum(`Bins received`),
                 `In process` = sum(`In process`),
-                Tipped = sum(Tipped),
-                `Currently in storage` = sum(`Bins currently in storage`)) |>
+                `Tipped*` = sum(Tipped)) |>
       mutate(RPIN = "Total",
              Orchard = "",
              `Production site` = "") |>
       relocate(RPIN, .before = `Received`) |>
       relocate(Orchard, .after = RPIN) |>
-      relocate(`Production site`, .after = Orchard)
+      relocate(`Production site`, .after = Orchard) |>
+      bind_cols(BRTotalPS)
     
     
     DT::datatable(BinDeliveryFull |>
-                    filter(Orchard %in% input$Orchards, #c("Home Block"), #
+                    filter(Orchard %in% input$Orchards,#c("Home Block","Wharerangi Orchard"), #
                            Season == 2025) |>
-                    select(c(RPIN, Orchard, `Production site`,`Bins received`,`In process`,Tipped,`Bins currently in storage`)) |>
+                    select(c(RPIN, Orchard, `Production site`,`Bins received`,`In process`,Tipped)) |>
                     group_by(RPIN,Orchard,`Production site`) |>
                     summarise(`Received` = sum(`Bins received`),
                               `In process` = sum(`In process`),
-                              Tipped = sum(Tipped),
-                              `Currently in storage` = sum(`Bins currently in storage`),
+                              `Tipped*` = sum(Tipped),
                               .groups = "drop") |>
-                    bind_rows(PSTotal),
+                    left_join(BinsRemainingPS, by =  c("RPIN", "Orchard", "Production site")) |>
+                    bind_rows(PSTotal) |>
+                    mutate(`Currently in storage` = replace_na(`Currently in storage`,0),
+                           `Alternative channel` = replace_na(`Alternative channel`,0),
+                           `Damaged bins` = replace_na(`Damaged bins`,0)),
                   options = list(scrollX = TRUE),
                   escape = FALSE,
                   rownames = FALSE)
@@ -1085,7 +599,7 @@ server <- function(input, output, session) {
       dplyr::select(c(`Bin delivery No`,RPIN,Orchard,`Production site`,`Management area`,
                       `Harvest Date`,`Bins received`,`Bins in process`,
                       `Bins currently in storage`,`Submission profile`,`Pick No`,
-                      `Storage site`,`Storage type`,SmartFreshed)) 
+                      `Received storage site`,`Storage type`,SmartFreshed)) 
     
   })  
   
@@ -1104,39 +618,143 @@ server <- function(input, output, session) {
   output$StorageByRPIN <- DT::renderDataTable({
     #req(credentials()$user_auth)
     
-    StorageRPINTotal <- BinDelivery |>
-      filter(Orchard %in% input$Orchards, #c("Home Block"), #
-             Season == 2025) |>
-      select(c(RPIN, Orchard, `Bins received`,`Bins currently in storage`)) |>
-      summarise(`Bins received` = sum(`Bins received`),
-                `Bins currently in storage` = sum(`Bins currently in storage`)) |>
-      mutate(RPIN = "Total",
-             Orchard = "",
-             `Storage site` = "",
-             `Storage type` = "") |>
-      relocate(`Bins received`, .after = `Storage type`) |>
-      relocate(`Bins currently in storage`, .after = `Bins received`)
-    
     # Define the table itself
     
-    DT::datatable(BinDelivery |>
-                    filter(Orchard %in% input$Orchards, #c("Home Block"), #
-                           Season == 2025) |>
-                    select(c(RPIN, Orchard, `Storage site`,`Storage type`,`Bins received`,`Bins currently in storage`)) |>
-                    group_by(RPIN, Orchard, `Storage site`,`Storage type`) |>
-                    summarise(`Bins received` = sum(`Bins received`),
-                              `Bins currently in storage` = sum(`Bins currently in storage`),
-                              .groups = "drop") |>
-                    pivot_wider(id_cols = c(RPIN, Orchard, `Storage site`),
-                                names_from = `Storage type`,
-                                values_from = c(`Bins received`,`Bins currently in storage`),
-                                values_fill = 0),
+    StorageChannel <- c("Te Ipu Packhouse (RO)","Kiwi crunch (FV)","Berl Property Ltd","Sunfruit Limited")
+    
+    BSByRPIN <- BinsRemaining |>
+      filter(Season == 2025,
+             `Current storage site` %in% StorageChannel) |>
+      select(-`Damage Reason`) |>
+      group_by(RPIN, Orchard, `Current storage site`,`Storage type`) |>
+      summarise(`Bins Currently in storage` = sum(BinQty, na.rm=T),
+                .groups = "drop") |>
+      pivot_wider(id_cols = c(RPIN, Orchard, `Current storage site`),
+                  names_from = c(`Storage type`),
+                  values_from = `Bins Currently in storage`,
+                  values_fill = 0) |>
+      rename(`Bins currently in storage CA` = CA,
+             `Bins currently in storage RA` = RA,
+             `Storage site` = `Current storage site`)
+    
+    FinalTable <- BinDelivery |>
+      filter(Orchard %in% input$Orchards, 
+             #Orchard %in% c("Sim2"), #
+             Season == 2025) |>
+      rename(`Storage site` = `Received storage site`) |>
+      select(c(RPIN, Orchard, `Storage site`,`Storage type`,`Bins received`)) |>
+      group_by(RPIN, Orchard, `Storage site`,`Storage type`) |>
+      summarise(`Bins received` = sum(`Bins received`),
+                .groups = "drop") |>
+      pivot_wider(id_cols = c(RPIN, Orchard, `Storage site`),
+                  names_from = `Storage type`,
+                  values_from = c(`Bins received`),
+                  values_fill = 0) 
+    
+    if(!("CA" %in% colnames(FinalTable))) {
+      FinalTable <- FinalTable |>
+        mutate(CA = 0)
+    } 
+    
+    DT::datatable(FinalTable |>
+                    rename(`Bins receieved CA` = CA,
+                           `Bins receieved RA` = RA) |>
+                    left_join(BSByRPIN, by = c("RPIN","Orchard","Storage site")) |>
+                    mutate(across(.cols = c(`Bins receieved CA`:`Bins currently in storage RA`), ~replace_na(.x, 0))),
                   options = list(scrollX = TRUE),
                   escape = FALSE,
                   rownames = FALSE)
     
   })
   
+  output$BinsRemainingByLoc <- DT::renderDataTable({
+    
+    StorageChannel <- c("Te Ipu Packhouse (RO)","Kiwi crunch (FV)","Berl Property Ltd","Sunfruit Limited")
+    
+    BinsRemByLoc <- BinsRemaining |>
+      filter(Orchard %in% input$Orchards, 
+             `Current storage site` %in% StorageChannel, 
+             Season == 2025) |>
+      select(-c(BinDeliveryID,`Damage Reason`,BinDamageID)) 
+      
+    DT::datatable(BinsRemByLoc,
+                  options = list(scrollX = TRUE),
+                  escape = FALSE,
+                  rownames = FALSE)
+    
+  })
+  
+  ##################################################################################
+  #                            Down load button                                    #
+  ############################# Bins received #####################################
+  
+  BISTable <- reactive({ 
+    #req(credentials()$user_auth)
+    
+    StorageChannel <- c("Te Ipu Packhouse (RO)","Kiwi crunch (FV)","Berl Property Ltd","Sunfruit Limited")
+    
+    BinsRemByLoc <- BinsRemaining |>
+      filter(Orchard %in% input$Orchards, 
+             `Current storage site` %in% StorageChannel, 
+             Season == 2025) |>
+      select(-c(BinDeliveryID,`Damage Reason`))  
+    
+  })  
+  
+  
+  output$downloadBIS <- downloadHandler(
+    filename = function() {
+      paste0("BinsInStorage-",Sys.Date(),".csv")
+    },
+    content = function(file) {
+      write.csv(BISTable(), file)
+    }
+  )
+  
+  output$BinsByAlternativeChannel <- DT::renderDataTable({
+    
+    StorageChannel <- c("Te Ipu Packhouse (RO)","Kiwi crunch (FV)","Berl Property Ltd","Sunfruit Limited")
+    
+    BinsAltChan <- BinsRemaining |>
+      filter(Orchard %in% input$Orchards, 
+             !(`Current storage site` %in% StorageChannel), 
+             Season == 2025) |>
+      select(-c(BinDeliveryID, `Storage type`,`Damage Reason`,BinDamageID)) |>
+      rename(`Alternative channel` = `Current storage site`)
+    
+    DT::datatable(BinsAltChan,
+                  options = list(scrollX = TRUE),
+                  escape = FALSE,
+                  rownames = FALSE)
+    
+  })
+  
+  ##################################################################################
+  #                            Down load button                                    #
+  ############################# Bins received #####################################
+  
+  ACTable <- reactive({ 
+    #req(credentials()$user_auth)
+    StorageChannel <- c("Te Ipu Packhouse (RO)","Kiwi crunch (FV)","Berl Property Ltd","Sunfruit Limited")
+    
+    BinsAltChan <- BinsRemaining |>
+      filter(Orchard %in% input$Orchards, 
+             !(`Current storage site` %in% StorageChannel), 
+             Season == 2025) |>
+      select(-c(BinDeliveryID, `Storage type`,`Damage Reason`)) |>
+      rename(`Alternative channel` = `Current storage site`)
+    
+  })  
+  
+  
+  output$downloadAC <- downloadHandler(
+    filename = function() {
+      paste0("AlternativeChannel-",Sys.Date(),".csv")
+    },
+    content = function(file) {
+      write.csv(ACTable(), file)
+    }
+  )
   
   # bin tipped tab - Closed batches Te Ipu
   
@@ -1211,31 +829,39 @@ server <- function(input, output, session) {
     
     OpenBatchesPSTotal <- GraderBatch |>
       filter(Season == 2025,
-             Orchard %in% input$Orchards, #("Home Block"),#
+             Orchard %in% input$Orchards, 
+             #Orchard %in% ("Springhill East"),#
              #`Packing site` == "Te Ipu Packhouse (RO)",
              `Batch closed` == 0) |>
       select(-c(GraderBatchID,Season,Grower,`Batch closed`)) |>
       summarise(`Bins to be tipped` = sum(`Bins tipped`, na.rm=T)) |>
-      mutate(RPIN = "Total",
+      mutate(`Grader Batch` = "Total",
+             RPIN = "",
              Orchard = "",
              `Production site` = "",
              `Packing site` = "") |>
-      select(c(RPIN, Orchard, `Production site`,`Packing site`,`Bins to be tipped`))
+      select(c(`Grader Batch`, RPIN, Orchard, `Production site`,`Packing site`,`Bins to be tipped`))
     
-    DT:: datatable(GraderBatch |>
-                     filter(Season == 2025,
-                            Orchard %in% input$Orchards, #c("Home Block"),#
-                            #`Packing site` == "Te Ipu Packhouse (RO)",
-                            `Batch closed` == 0) |>
-                     select(-c(GraderBatchID,Grower,`Batch closed`)) |>
-                     group_by(RPIN,Orchard,`Production site`,`Packing site`) |>
-                     summarise(`Bins to be tipped` = sum(`Bins tipped`, na.rm=T),
-                               .groups = "drop") |>
-                     bind_rows(OpenBatchesPSTotal) |>
-                     mutate(`Bins to be tipped` = scales::comma(`Bins to be tipped`, 1.0)),
-                   options = list(scrollX = TRUE),
+    OpenBatchesFinal <- GraderBatch |>
+      filter(Season == 2025,
+             Orchard %in% input$Orchards, 
+             #Orchard %in% ("Springhill East"),#
+             #`Packing site` == "Te Ipu Packhouse (RO)",
+             `Batch closed` == 0) |>
+      select(-c(GraderBatchID,Grower,`Batch closed`)) |>
+      group_by(`Grader Batch`,RPIN,Orchard,`Production site`,`Packing site`) |>
+      summarise(`Bins to be tipped` = sum(`Bins tipped`, na.rm=T),
+                .groups = "drop") |>
+      bind_rows(OpenBatchesPSTotal) |>
+      mutate(`Bins to be tipped` = scales::comma(`Bins to be tipped`, 1.0))
+    
+    DT:: datatable(OpenBatchesFinal,
+                   options = list(
+                     scrollX = TRUE,
+                     columnDefs = list(list(className = 'dt-right', targets = 5))
+                     ),
                    escape = FALSE,
-                   rownames = FALSE)
+                   rownames = FALSE) 
   })
   
   ##############################################################################
@@ -1272,6 +898,7 @@ server <- function(input, output, session) {
       filter(Season == 2025,
              `Batch closed` == 1,
              Orchard  %in% input$Orchards) |>
+             #Orchard %in% ("Springhill East")) |>
       distinct(Grower) |>
       pull(Grower)
     
@@ -1305,7 +932,8 @@ server <- function(input, output, session) {
       pivot_wider(id_cols = Grower,
                   names_from = `Packing site`,
                   values_from = Packout,
-                  values_fill = NA)
+                  values_fill = NA) |>
+      select(-c(Aggregated))
     
     DT:: datatable(PackoutSummary,
                    options = list(scrollX = TRUE),
@@ -1318,6 +946,7 @@ server <- function(input, output, session) {
      filter(Season == 2025,
             `Batch closed` == 1,
             Orchard %in% input$Orchards) |>
+            #Orchard %in% ("Springhill East")) |>
      group_by(Grower,RPIN,Orchard) |>
      summarise(`Input kgs` = sum(`Input kgs`, na.rm=T),
                `Reject kgs` = sum(`Reject kgs`, na.rm=T),
@@ -1341,7 +970,8 @@ server <- function(input, output, session) {
      pivot_wider(id_cols = c(Grower,RPIN, Orchard),
                  names_from = c(`Packing site`),
                  values_from = Packout,
-                 values_fill = NA) 
+                 values_fill = NA) |>
+     select(-c(Aggregated))
    
    DT:: datatable(PackoutSummary,
                   options = list(scrollX = TRUE),
@@ -1377,7 +1007,8 @@ server <- function(input, output, session) {
      pivot_wider(id_cols = c(Grower,RPIN,Orchard,`Production site`),
                  names_from = c(`Packing site`),
                  values_from = Packout,
-                 values_fill = NA) 
+                 values_fill = NA) |>
+     select(-c(Aggregated))
    
    DT:: datatable(PackoutSummary,
                   options = list(scrollX = TRUE),
@@ -1526,111 +1157,213 @@ server <- function(input, output, session) {
   
   output$RTESummary <- DT::renderDataTable({  
   
-    PDMod <- PoolDefinition |>
-      mutate(Pool = str_sub(`Pool description`, 15, -1),
-             `Pool description` = if_else(Pool %in% c(0,140,145,160,165),
-                                          "Mixed",
-                                          as.character(Pool))) |>
-      filter(Pool != 52)
-  
-    RTEs <- RTEsFromFieldBins |>
-      bind_rows(RTEsFromRepack) |>
-      bind_rows(RTEsFromPresize)
-  
-    RTEsFFBWithPools <- RTEs |>
+    RTEsByPool <- RTEsFromPTV |>
       filter(Season == 2025) |>
-      left_join(PDMod |> select(c(ProductID,`Pool description`)),
-                by = "ProductID")
+      mutate(`Pool description` = str_sub(`Pool description`,15,-1),
+             PoolDesc = case_when(`Pool description` %in% c("0","140","145","160","165") ~ "Mixed",
+                                  TRUE ~ `Pool description`),
+             GraderBatchID = coalesce(GraderBatchID, PresizeGraderBatchID)) |>
+      group_by(GraderBatchID, PoolDesc) |>
+      summarise(RTEs = sum(TransRTE, na.rm=T),
+                .groups = "drop") 
+      
   
-    RTEByGB <- RTEsFFBWithPools |>
-      group_by(GraderBatchID, GraderBatchNo,Grower,RPIN,Orchard,`Production site`,`Pool description`) |>
+    RTEByGB <- GraderBatch |>
+      # Filtering for closed batches only
+      filter(`Batch closed` == 1,
+             Season == 2025) |>
+      left_join(RTEsByPool, by = "GraderBatchID") |>
+      filter(!is.na(PoolDesc)) |>
+      group_by(GraderBatchID, `Grader Batch`,Grower,RPIN,Orchard,`Production site`,PoolDesc) |>
       summarise(RTEs = sum(RTEs, na.rm=T),
                 .groups = "drop") |>
-      pivot_wider(id_cols = c(GraderBatchID, GraderBatchNo,Grower,RPIN,Orchard,`Production site`),
-                  names_from = `Pool description`,
+      pivot_wider(id_cols = c(GraderBatchID, `Grader Batch`,Grower,RPIN,Orchard,`Production site`),
+                  names_from = PoolDesc,
                   values_from = RTEs,
-                 values_fill = 0) |>
+                  values_fill = 0) |>
       rowwise() |>
-      mutate(TotalRTEs = sum(c_across(`58`:Mixed))) |>
+      mutate(`53` = 0,
+             TotalRTEs = sum(c_across(`58`:Mixed))) |>
+      relocate(`53`, .before = `58`) |>
       left_join(BinsTipped, by = "GraderBatchID") |>
       mutate(RTEsPerBin = TotalRTEs/BinQty) |>
       filter(!is.na(BinQty)) |>
-      arrange(GraderBatchNo)
+      arrange(`Grader Batch`)
     
     if (input$RTEAgg == "Batch") {
       
+      RTEsByGBParsedTotal <- RTEByGB |>
+        filter(Orchard %in% input$Orchards) |>
+        #filter(Orchard %in% c("Springhill East")) |>
+        ungroup() |>
+        summarise(across(.cols = c(`53`:BinQty), ~sum(., na.rm=T))) |>
+        mutate(RTEsPerBin = TotalRTEs/BinQty,
+               `Grader Batch` = "Total",
+               Grower = "",
+               RPIN = "",
+               Orchard = "",
+               `Production site` = "") |>
+        relocate(`Grader Batch`, .before = `58`) |>
+        relocate(Grower, .after = `Grader Batch`) |>
+        relocate(RPIN, .after = Grower) |>
+        relocate(Orchard, .after = RPIN) |> 
+        relocate(`53`, .before = `58`) |>
+        relocate(`Production site`, .after = Orchard)
+      
       RTEsByGBParsed <- RTEByGB |>
         filter(Orchard %in% input$Orchards) |>
-        mutate(across(.cols = c(`58`:RTEsPerBin), ~scales::comma(.,1.0))) |>
+        #filter(Orchard %in% c("Springhill East")) |>
         select(-c(GraderBatchID)) |>
-        arrange(GraderBatchNo)
+        arrange(`Grader Batch`) |>
+        bind_rows(RTEsByGBParsedTotal) |>
+        rename(`Mixed*`= Mixed,
+               `Total RTEs*` = TotalRTEs) |>
+        mutate(across(.cols = c(`58`:RTEsPerBin), ~scales::comma(.,1.0))) |>
+        select(-c(`53`:`Mixed*`))
+        
+        
       
-      DT:: datatable(RTEsByGBParsed,
+      DT::datatable(RTEsByGBParsed,
                      options = list(
-                       columnDefs = list(list(className = 'dt-right', targets = 5:12)),
+                       columnDefs = list(list(className = 'dt-right', targets = 5:7)),
                        scrollX = TRUE
                      ),
                      escape = FALSE,
-                     rownames = FALSE)
+                     rownames = FALSE) |>
+        DT::formatStyle(
+          0,
+          target="row",
+          fontWeight = DT::styleRow(c(nrow(RTEsByGBParsed)),"bold")
+        )
       
     } else if (input$RTEAgg == "Production site") {
-      
+
+      RTEsByPSParsedTotal <- RTEByGB |>
+        filter(Orchard %in% input$Orchards) |>
+        #filter(Orchard %in% c("Springhill East")) |>
+        ungroup() |>
+        summarise(across(.cols = c(`53`:BinQty), ~sum(., na.rm=T))) |>
+        mutate(RTEsPerBin = TotalRTEs/BinQty,
+               Grower = "Total",
+               RPIN = "",
+               Orchard = "",
+               `Production site` = "") |>
+        relocate(Grower, .before = `58`) |>
+        relocate(RPIN, .after = Grower) |>
+        relocate(Orchard, .after = RPIN) |>
+        relocate(`53`, .before = `58`) |>
+        relocate(`Production site`, .after = Orchard)
+            
       RTEsByPSParsed <- RTEByGB |>
         filter(Orchard %in% input$Orchards) |>
+        #filter(Orchard %in% c("Springhill East")) |>
         group_by(Grower,RPIN,Orchard,`Production site`) |>
-        summarise(across(.cols = c(`58`:BinQty), ~sum(.,na.rm=T)),
+        summarise(across(.cols = c(`53`:BinQty), ~sum(.,na.rm=T)),
                   .groups = "drop") |>
-        mutate(RTEsPerBin = TotalRTEs/BinQty,
-               across(.cols = c(`58`:RTEsPerBin), ~scales::comma(.,1.0))) 
+        mutate(RTEsPerBin = TotalRTEs/BinQty) |>
+        bind_rows(RTEsByPSParsedTotal) |>
+        rename(`Mixed*`= Mixed,
+               `Total RTEs*` = TotalRTEs) |>
+        mutate(across(.cols = c(`58`:RTEsPerBin), ~scales::comma(.,1.0))) |>
+        select(-c(`53`:`Mixed*`))
       
       DT:: datatable(RTEsByPSParsed,
                      options = list(
-                       columnDefs = list(list(className = 'dt-right', targets = 4:11)),
+                       columnDefs = list(list(className = 'dt-right', targets = 4:6)),
                        scrollX = TRUE
                      ),
                      escape = FALSE,
-                     rownames = FALSE)
+                     rownames = FALSE) |>
+        DT::formatStyle(
+          0,
+          target="row",
+          fontWeight = DT::styleRow(c(nrow(RTEsByPSParsed)),"bold")
+        )
       
     } else if (input$RTEAgg == "Orchard/RPIN") {
-      
+
+      RTEsByRPINParsedTotal <- RTEByGB |>
+        filter(Orchard %in% input$Orchards) |>
+        #filter(Orchard %in% c("Springhill East")) |>
+        ungroup() |>
+        summarise(across(.cols = c(`53`:BinQty), ~sum(., na.rm=T))) |>
+        mutate(RTEsPerBin = TotalRTEs/BinQty,
+               Grower = "Total",
+               RPIN = "",
+               Orchard = "") |>
+        relocate(Grower, .before = `58`) |>
+        relocate(RPIN, .after = Grower) |>
+        relocate(Orchard, .after = RPIN) |>
+        relocate(`53`, .before = `58`) 
+            
       RTEsByRPINParsed <- RTEByGB |>
         filter(Orchard %in% input$Orchards) |>
+        #filter(Orchard %in% c("Springhill East")) |>
         group_by(Grower,RPIN,Orchard) |>
-        summarise(across(.cols = c(`58`:BinQty), ~sum(.,na.rm=T)),
+        summarise(across(.cols = c(`53`:BinQty), ~sum(.,na.rm=T)),
                   .groups = "drop") |>
-        mutate(RTEsPerBin = TotalRTEs/BinQty,
-               across(.cols = c(`58`:RTEsPerBin), ~scales::comma(.,1.0))) 
+        mutate(RTEsPerBin = TotalRTEs/BinQty) |>
+        bind_rows(RTEsByRPINParsedTotal) |>
+        rename(`Mixed*`= Mixed,
+               `Total RTEs*` = TotalRTEs) |>
+        mutate(across(.cols = c(`58`:RTEsPerBin), ~scales::comma(.,1.0))) |>
+        select(-c(`53`:`Mixed*`))
       
       DT:: datatable(RTEsByRPINParsed,
                      options = list(
-                       columnDefs = list(list(className = 'dt-right', targets = 3:10)),
+                       columnDefs = list(list(className = 'dt-right', targets = 3:5)),
                        scrollX = TRUE
                      ),
                      escape = FALSE,
-                     rownames = FALSE)
+                     rownames = FALSE) |>
+        DT::formatStyle(
+          0,
+          target="row",
+          fontWeight = DT::styleRow(c(nrow(RTEsByRPINParsed)),"bold")
+        )
       
     } else {
       
       GrowerList <- RTEByGB |>
         filter(Orchard %in% input$Orchards) |>
+        #filter(Orchard %in% c("Springhill East")) |>
         distinct(Grower) |>
         pull(Grower)
+      
+      RTEsByGrowerParsedTotal <- RTEByGB |>
+        filter(Grower %in% GrowerList) |>
+        ungroup() |>
+        summarise(across(.cols = c(`53`:BinQty), ~sum(., na.rm=T))) |>
+        mutate(RTEsPerBin = TotalRTEs/BinQty,
+               Grower = "Total") |>
+        relocate(Grower, .before = `58`) |>
+        relocate(`53`, .before = `58`) 
       
       RTEsByGrowerParsed <- RTEByGB |>
         filter(Grower %in% GrowerList) |>
         group_by(Grower) |>
-        summarise(across(.cols = c(`58`:BinQty), ~sum(.,na.rm=T)),
+        summarise(across(.cols = c(`53`:BinQty), ~sum(.,na.rm=T)),
                   .groups = "drop") |>
-        mutate(RTEsPerBin = TotalRTEs/BinQty,
-               across(.cols = c(`58`:RTEsPerBin), ~scales::comma(.,1.0))) 
+        mutate(RTEsPerBin = TotalRTEs/BinQty) |>
+        bind_rows(RTEsByGrowerParsedTotal) |>  
+        rename(`Mixed*`= Mixed,
+               `Total RTEs*` = TotalRTEs) |>
+        mutate(across(.cols = c(`58`:RTEsPerBin), ~scales::comma(.,1.0))) |>
+        select(-c(`53`:`Mixed*`))
       
-      DT:: datatable(RTEsByGrowerParsed,
+      DT::datatable(RTEsByGrowerParsed,
                      options = list(
-                       columnDefs = list(list(className = 'dt-right', targets = 1:8)),
+                       columnDefs = list(list(className = 'dt-right', targets = 1:3)),
                        scrollX = TRUE
                        ),
                      escape = FALSE,
-                     rownames = FALSE)
+                     rownames = FALSE) |>
+        DT::formatStyle(
+          0,
+          target="row",
+          fontWeight = DT::styleRow(c(nrow(RTEsByGrowerParsed)),"bold")
+        )
+      
       
     }
       
@@ -1645,38 +1378,45 @@ server <- function(input, output, session) {
   RTESumTable <- reactive({ 
     #req(credentials()$user_auth)
     
-    PDMod <- PoolDefinition |>
-      mutate(Pool = str_sub(`Pool description`, 15, -1),
-             `Pool description` = if_else(Pool %in% c(0,140,145,160,165),
-                                          "Mixed",
-                                          as.character(Pool))) |>
-      filter(Pool != 52)
-    
-    RTEs <- RTEsFromFieldBins |>
-      bind_rows(RTEsFromRepack) |>
-      bind_rows(RTEsFromPresize)
-    
-    RTEsFFBWithPools <- RTEs |>
+    RTEsByPool <- RTEsFromPTV |>
       filter(Season == 2025) |>
-      left_join(PDMod |> select(c(ProductID,`Pool description`)),
-                by = "ProductID")
-    
-    RTEsFFBWithPools |>
-      filter(Orchard %in% input$Orchards) |>
-      group_by(GraderBatchID, GraderBatchNo,Grower,RPIN,Orchard,`Production site`,`Pool description`) |>
+      mutate(`Pool description` = str_sub(`Pool description`,15,-1),
+             PoolDesc = case_when(`Pool description` %in% c("0","140","145","160","165") ~ "Mixed",
+                                  TRUE ~ `Pool description`),
+             GraderBatchID = coalesce(GraderBatchID, PresizeGraderBatchID)) |>
+      group_by(GraderBatchID, PoolDesc) |>
+      summarise(RTEs = sum(TransRTE, na.rm=T),
+                .groups = "drop") 
+   
+    RTEByGB <- GraderBatch |>
+      # Filtering for closed batches only
+      filter(`Batch closed` == 1,
+             Season == 2025) |>
+      left_join(RTEsByPool, by = "GraderBatchID") |>
+      filter(!is.na(PoolDesc)) |>
+      group_by(GraderBatchID, `Grader Batch`,Grower,RPIN,Orchard,`Production site`,PoolDesc) |>
       summarise(RTEs = sum(RTEs, na.rm=T),
                 .groups = "drop") |>
-      pivot_wider(id_cols = c(GraderBatchID, GraderBatchNo,Grower,RPIN,Orchard,`Production site`),
-                  names_from = `Pool description`,
+      pivot_wider(id_cols = c(GraderBatchID, `Grader Batch`,Grower,RPIN,Orchard,`Production site`),
+                  names_from = PoolDesc,
                   values_from = RTEs,
                   values_fill = 0) |>
       rowwise() |>
-      mutate(TotalRTEs = sum(c_across(`58`:Mixed))) |>
+      mutate(`53` = 0,
+             TotalRTEs = sum(c_across(`58`:Mixed))) |>
+      relocate(`53`, .before = `58`) |>
       left_join(BinsTipped, by = "GraderBatchID") |>
       mutate(RTEsPerBin = TotalRTEs/BinQty) |>
       filter(!is.na(BinQty)) |>
+      arrange(`Grader Batch`)
+    
+    RTEByGB |>
+      filter(Orchard %in% c("Springhill East")) |>
+      #filter(Orchard %in% input$Orchards) |>
+      rowwise() |>
+      filter(!is.na(BinQty)) |>
       select(-c(GraderBatchID)) |>
-      arrange(GraderBatchNo)
+      arrange(`Grader Batch`)
     
   })  
   
@@ -2020,6 +1760,112 @@ server <- function(input, output, session) {
     
     
   })
+  
+  ##################################################################################
+  #                            Down load button                                    #
+  ############################# Defect  Summary ####################################
+  
+  DefectSumTable <- reactive({ 
+    #req(credentials()$user_auth)
+    
+    SampQtyPop <- DefectAssessment |>
+      filter(Season == 2025) |>
+      inner_join(GraderBatch |>
+                   filter(Season == 2025,
+                          `Batch closed` == 1,
+                          `Packing site` == "Te Ipu Packhouse (RO)") |>
+                   select(c(GraderBatchID)),
+                 by = "GraderBatchID") |>
+      group_by(GraderBatchID) |>
+      summarise(SampleQty = max(SampleQty, na.rm=T),
+                .groups = "drop") |>
+      summarise(SampleQty = sum(SampleQty, na.rm=T))
+    
+    POPop <- GraderBatch |>
+      filter(Season == 2025,
+             `Batch closed` == 1,
+             `Packing site` == "Te Ipu Packhouse (RO)") |>
+      summarise(`Input kgs` = sum(`Input kgs`, na.rm=T),
+                `Reject kgs` = sum(`Reject kgs`, na.rm=T)) |>
+      mutate(Packout = 1-`Reject kgs`/`Input kgs`) |>
+      select(-c(`Reject kgs`,`Input kgs`))
+    
+    DA2025pop <- DefectAssessment |>
+      filter(Season == 2025) |>
+      inner_join(GraderBatch |>
+                   filter(Season == 2025,
+                          `Batch closed` == 1,
+                          `Packing site` == "Te Ipu Packhouse (RO)") |>
+                   mutate(Packout = 1-`Reject kgs`/`Input kgs`) |>
+                   select(c(GraderBatchID,`Reject kgs`,`Input kgs`)),
+                 by = "GraderBatchID") |>
+      group_by(Defect) |>
+      summarise(DefectQty = sum(DefectQty)) |>
+      mutate(SampleQty = SampQtyPop[[1]],
+             Packout = POPop[[1]],
+             defProp = (1-Packout)*DefectQty/SampleQty,
+             defPerc = scales::percent(defProp, 0.1),
+             Orchard = "Population") |>
+      relocate(Orchard, .before = Defect)
+    
+    SampQtyRPIN <- DefectAssessment |>
+      filter(Season == 2025,
+             #Orchard %in% c("Home Block", "Stock Roads")) |> 
+             Orchard %in% input$Orchards) |>
+      inner_join(GraderBatch |>
+                   filter(Season == 2025,
+                          `Batch closed` == 1,
+                          `Packing site` == "Te Ipu Packhouse (RO)") |>
+                   mutate(Packout = 1-`Reject kgs`/`Input kgs`) |>
+                   select(c(GraderBatchID,`Reject kgs`,`Input kgs`)),
+                 by = "GraderBatchID") |>
+      group_by(Orchard, GraderBatchID) |>
+      summarise(SampleQty = max(SampleQty),
+                .groups = "drop") |>
+      summarise(SampleQty = sum(SampleQty))
+    
+    PORPIN <- GraderBatch |>
+      filter(Season == 2025,
+             `Batch closed` == 1,
+             `Packing site` == "Te Ipu Packhouse (RO)",
+             #Orchard %in% c("Home Block", "Stock Roads")) |> 
+             Orchard %in% input$Orchards) |>
+      summarise(`Input kgs` = sum(`Input kgs`, na.rm=T),
+                `Reject kgs` = sum(`Reject kgs`, na.rm=T)) |>
+      mutate(Packout = 1-`Reject kgs`/`Input kgs`) |>
+      select(-c(`Reject kgs`,`Input kgs`))
+    
+    DefectAssessment |>
+      filter(Season == 2025,
+             #Orchard %in% c("Home Block", "Stock Roads")) |> 
+             Orchard %in% input$Orchards) |>
+      inner_join(GraderBatch |>
+                   filter(Season == 2025,
+                          `Batch closed` == 1,
+                          `Packing site` == "Te Ipu Packhouse (RO)") |>
+                   mutate(Packout = 1-`Reject kgs`/`Input kgs`) |>
+                   select(c(GraderBatchID,`Reject kgs`,`Input kgs`)),
+                 by = "GraderBatchID") |>
+      group_by(Orchard,Defect) |>
+      summarise(DefectQty = sum(DefectQty)) |>
+      mutate(SampleQty = SampQtyRPIN[[1]],
+             Packout = PORPIN[[1]],
+             defProp = (1-Packout)*DefectQty/SampleQty,
+             defPerc = scales::percent(defProp, 0.1)) |>
+      bind_rows(DA2025pop)
+    
+  })  
+  
+  
+  output$DefectDownload <- downloadHandler(
+    filename = function() {
+      paste0("DefectSummary-",Sys.Date(),".csv")
+    },
+    content = function(file) {
+      write.csv(DefectSumTable(), file)
+    }
+  )
+  
   
 }
 # Run the application 
